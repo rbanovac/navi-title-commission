@@ -149,6 +149,9 @@ interface SavedEntry {
   guarantee: number;
   empMonth: number;
   resaleDeductionAmt?: number;
+  // Sarah Perkins revenue split
+  escrowFees?: number;
+  titleFees?: number;
 }
 
 // ─── Print / Export Helpers ────────────────────────────────────────────────────
@@ -174,15 +177,19 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
 
   const color = REP_COLORS[REPS.findIndex(r => r.name === rep.name)] ?? "#3b82f6";
 
+  const isSarahPDF = rep.name === "Sarah Perkins";
   const rows = repEntries.map(e => {
     const rda       = e.resaleDeductionAmt ?? getResaleDed(e.repName);
     const resaleDed = e.closedResale * rda;
     const afterDed  = e.grossRevenue - resaleDed;
     const commable  = Math.max(0, afterDed - e.commBase);
+    const revenueCell = isSarahPDF
+      ? `<td>${fmtD(e.escrowFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">Escrow</span></td><td>${fmtD(e.titleFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">Title</span></td><td><strong>${fmtD(e.grossRevenue)}</strong></td>`
+      : `<td>${fmtD(e.grossRevenue)}</td>`;
     return `
       <tr>
         <td>${MONTH_FULL[e.month-1]} ${e.year}</td>
-        <td>${fmtD(e.grossRevenue)}</td>
+        ${revenueCell}
         <td style="text-align:center">${e.totalClosed ?? "—"}</td>
         <td>${e.closedResale > 0 ? `${e.closedResale} (−${fmt(resaleDed)})` : "—"}</td>
         <td>${e.commBase > 0 ? fmt(e.commBase) : e.guarantee > 0 ? `${fmt(e.guarantee)} draw` : "—"}</td>
@@ -277,14 +284,19 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
   <table>
     <thead>
       <tr>
-        <th>Period</th><th>Gross Revenue</th><th>Total Closed</th><th>Resale Adj.</th><th>Base / Draw</th><th>Commissionable</th><th>Commission</th>
+        <th>Period</th>
+        ${isSarahPDF ? "<th>Escrow Fees</th><th>Title Fees</th><th>Total Revenue</th>" : "<th>Gross Revenue</th>"}
+        <th>Total Closed</th><th>Resale Adj.</th><th>Base / Draw</th><th>Commissionable</th><th>Commission</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="totals">
         <td>Total</td>
-        <td>${fmtD(totalRev)}</td>
+        ${isSarahPDF
+          ? `<td>${fmtD(repEntries.reduce((s,e)=>s+(e.escrowFees??0),0))}</td><td>${fmtD(repEntries.reduce((s,e)=>s+(e.titleFees??0),0))}</td><td>${fmtD(totalRev)}</td>`
+          : `<td>${fmtD(totalRev)}</td>`
+        }
         <td>—</td><td>—</td><td>—</td>
         <td class="highlight">${fmtD(totalComm)}</td>
       </tr>
@@ -312,10 +324,13 @@ function exportAccountingPDF(month: number, year: number, entries: SavedEntry[])
     if (!e) return `<tr style="color:#9ca3af"><td>${rep.name}</td><td colspan="5" style="text-align:center;font-size:12px">No data for this period</td></tr>`;
     const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
     const rda = e.resaleDeductionAmt ?? getResaleDed(e.repName);
+    const revCell = rep.name === "Sarah Perkins" && (e.escrowFees || e.titleFees)
+      ? `<td><strong>${fmtD(e.grossRevenue)}</strong><br/><span style="font-size:10px;color:#6b7280">Escrow ${fmtD(e.escrowFees??0)} + Title ${fmtD(e.titleFees??0)}</span></td>`
+      : `<td>${fmtD(e.grossRevenue)}</td>`;
     return `
       <tr>
         <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px"></span>${rep.name}</td>
-        <td>${fmtD(e.grossRevenue)}</td>
+        ${revCell}
         <td style="text-align:center">${e.totalClosed ?? "—"}</td>
         <td>${e.closedResale > 0 ? `${e.closedResale} (−${fmt(e.closedResale*rda)})` : "—"}</td>
         <td>${e.commBase > 0 ? fmt(e.commBase) : e.guarantee > 0 ? `${fmt(e.guarantee)} draw` : "—"}</td>
@@ -431,18 +446,26 @@ interface RepRowProps {
   revenue: string;
   resale: string;
   totalClosed: string;
+  escrowFees: string;
+  titleFees: string;
   onRevenueChange:     (v: string) => void;
   onResaleChange:      (v: string) => void;
   onTotalClosedChange: (v: string) => void;
+  onEscrowFeesChange:  (v: string) => void;
+  onTitleFeesChange:   (v: string) => void;
   savedEntry?: SavedEntry;
 }
 
-function RepRow({ rep, year, month, revenue, resale, totalClosed, onRevenueChange, onResaleChange, onTotalClosedChange, savedEntry }: RepRowProps) {
+function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, titleFees, onRevenueChange, onResaleChange, onTotalClosedChange, onEscrowFeesChange, onTitleFeesChange, savedEntry }: RepRowProps) {
+  const isSarah = rep.name === "Sarah Perkins";
   const [expanded, setExpanded] = useState(false);
   const empMonth  = getEmpMonth(rep, year, month);
   const commBase  = rep.getCommBase(empMonth);
   const guarantee = rep.getGuarantee(empMonth);
-  const gross     = parseFloat(revenue.replace(/[^0-9.]/g,"")) || 0;
+  const escrowNum = parseFloat(escrowFees.replace(/[^0-9.]/g,"")) || 0;
+  const titleNum  = parseFloat(titleFees.replace(/[^0-9.]/g,""))  || 0;
+  // For Sarah: grossRevenue is the sum of the two split fields
+  const gross     = isSarah ? escrowNum + titleNum : (parseFloat(revenue.replace(/[^0-9.]/g,"")) || 0);
   const res       = parseInt(resale) || 0;
   const resaleDedAmt = getResaleDed(rep.name);
   const isHannah  = rep.name === "Hannah Pfleiger";
@@ -459,7 +482,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, onRevenueChang
 
   const isDirty = savedEntry
     ? Math.abs(savedEntry.grossRevenue - gross) > 0.005 || savedEntry.closedResale !== res
-    : gross > 0 || res > 0 || parseInt(totalClosed) > 0;
+    : gross > 0 || res > 0 || parseInt(totalClosed) > 0 || escrowNum > 0 || titleNum > 0;
 
   return (
     <div className="rep-card">
@@ -484,39 +507,88 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, onRevenueChang
       </div>
 
       <div className="input-grid">
-        <div className="input-group">
-          <label className="input-label">Total Revenue</label>
-          <div className="input-wrapper">
-            <span className="input-prefix">$</span>
-            <input type="text" className="calc-input" placeholder="0" value={revenue}
-              onChange={e => {
-                // Allow digits, one decimal point, and up to 2 decimal places
-                const raw = e.target.value.replace(/[^0-9.]/g,"");
-                // Prevent multiple decimal points
-                const parts = raw.split(".");
-                const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : raw;
-                // Format integer part with commas, keep decimal portion as-is while typing
-                if (cleaned === "" || cleaned === ".") {
-                  onRevenueChange(cleaned);
-                } else if (cleaned.endsWith(".") || (cleaned.includes(".") && cleaned.endsWith("0"))) {
-                  // User is mid-typing decimal — format integer part only, preserve suffix
-                  const [intPart, decPart] = cleaned.split(".");
-                  const formatted = intPart ? parseInt(intPart).toLocaleString() + "." + (decPart ?? "") : "." + (decPart ?? "");
-                  onRevenueChange(formatted);
-                } else {
-                  const num = parseFloat(cleaned);
-                  if (!isNaN(num)) {
-                    // Only format as full currency when not mid-decimal-entry
+        {isSarah ? (
+          // Sarah Perkins: split Escrow Fees + Title Fees → sum = Total Revenue
+          <>
+            <div className="input-group">
+              <label className="input-label">Escrow Fees</label>
+              <div className="input-wrapper">
+                <span className="input-prefix">$</span>
+                <input type="text" className="calc-input" placeholder="0" value={escrowFees}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9.]/g,"");
+                    const parts = raw.split(".");
+                    const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : raw;
+                    if (cleaned === "" || cleaned === ".") { onEscrowFeesChange(cleaned); return; }
+                    if (cleaned.endsWith(".") || (cleaned.includes(".") && cleaned.endsWith("0"))) {
+                      const [ip, dp] = cleaned.split(".");
+                      onEscrowFeesChange((ip ? parseInt(ip).toLocaleString() : "") + "." + (dp ?? ""));
+                    } else {
+                      const [ip, dp] = cleaned.split(".");
+                      onEscrowFeesChange(dp !== undefined ? parseInt(ip||"0").toLocaleString() + "." + dp.slice(0,2) : parseInt(ip||"0").toLocaleString());
+                    }
+                  }}/>
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Title Fees</label>
+              <div className="input-wrapper">
+                <span className="input-prefix">$</span>
+                <input type="text" className="calc-input" placeholder="0" value={titleFees}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9.]/g,"");
+                    const parts = raw.split(".");
+                    const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : raw;
+                    if (cleaned === "" || cleaned === ".") { onTitleFeesChange(cleaned); return; }
+                    if (cleaned.endsWith(".") || (cleaned.includes(".") && cleaned.endsWith("0"))) {
+                      const [ip, dp] = cleaned.split(".");
+                      onTitleFeesChange((ip ? parseInt(ip).toLocaleString() : "") + "." + (dp ?? ""));
+                    } else {
+                      const [ip, dp] = cleaned.split(".");
+                      onTitleFeesChange(dp !== undefined ? parseInt(ip||"0").toLocaleString() + "." + dp.slice(0,2) : parseInt(ip||"0").toLocaleString());
+                    }
+                  }}/>
+              </div>
+            </div>
+            {(escrowNum > 0 || titleNum > 0) && (
+              <div className="input-group">
+                <label className="input-label">Total Revenue</label>
+                <div className="input-wrapper sarah-total-display">
+                  <span className="sarah-total-value">{fmt(gross)}</span>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="input-group">
+            <label className="input-label">Total Revenue</label>
+            <div className="input-wrapper">
+              <span className="input-prefix">$</span>
+              <input type="text" className="calc-input" placeholder="0" value={revenue}
+                onChange={e => {
+                  const raw = e.target.value.replace(/[^0-9.]/g,"");
+                  const parts = raw.split(".");
+                  const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : raw;
+                  if (cleaned === "" || cleaned === ".") {
+                    onRevenueChange(cleaned);
+                  } else if (cleaned.endsWith(".") || (cleaned.includes(".") && cleaned.endsWith("0"))) {
                     const [intPart, decPart] = cleaned.split(".");
-                    const formattedInt = parseInt(intPart || "0").toLocaleString();
-                    onRevenueChange(decPart !== undefined ? formattedInt + "." + decPart.slice(0, 2) : formattedInt);
+                    const formatted = intPart ? parseInt(intPart).toLocaleString() + "." + (decPart ?? "") : "." + (decPart ?? "");
+                    onRevenueChange(formatted);
                   } else {
-                    onRevenueChange("");
+                    const num = parseFloat(cleaned);
+                    if (!isNaN(num)) {
+                      const [intPart, decPart] = cleaned.split(".");
+                      const formattedInt = parseInt(intPart || "0").toLocaleString();
+                      onRevenueChange(decPart !== undefined ? formattedInt + "." + decPart.slice(0, 2) : formattedInt);
+                    } else {
+                      onRevenueChange("");
+                    }
                   }
-                }
-              }}/>
+                }}/>
+            </div>
           </div>
-        </div>
+        )}
         <div className="input-group">
           <label className="input-label">Closed Resale Transactions</label>
           <div className="input-wrapper">
@@ -588,12 +660,17 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   const [revenues,     setRevenues]     = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
   const [resales,      setResales]      = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
   const [totalCloseds, setTotalCloseds] = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
+  // Sarah Perkins split revenue fields
+  const [escrowFeesMap, setEscrowFeesMap] = useState<Record<string,string>>({"Sarah Perkins": ""});
+  const [titleFeesMap,  setTitleFeesMap]  = useState<Record<string,string>>({"Sarah Perkins": ""});
   const [saveStatus, setSaveStatus] = useState<"idle"|"saved">("idle");
 
   const loadMonth = useCallback((year: number, month: number) => {
     const rev: Record<string,string> = {};
     const res: Record<string,string> = {};
     const tc:  Record<string,string> = {};
+    const escrow: Record<string,string> = {};
+    const title:  Record<string,string> = {};
     REPS.forEach(rep => {
       const e = savedEntries.find(s => s.repName===rep.name && s.year===year && s.month===month);
       // Preserve cents when loading saved revenue back into the input
@@ -607,8 +684,20 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
       }
       res[rep.name] = e ? String(e.closedResale) : "";
       tc[rep.name]  = e ? String(e.totalClosed ?? "") : "";
+      if (rep.name === "Sarah Perkins") {
+        const fmtField = (v?: number) => {
+          if (!v) return "";
+          return v % 1 !== 0
+            ? v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
+            : v.toLocaleString("en-US",{maximumFractionDigits:0});
+        };
+        escrow["Sarah Perkins"] = fmtField(e?.escrowFees);
+        title["Sarah Perkins"]  = fmtField(e?.titleFees);
+      }
     });
-    setRevenues(rev); setResales(res); setTotalCloseds(tc); setSaveStatus("idle");
+    setRevenues(rev); setResales(res); setTotalCloseds(tc);
+    setEscrowFeesMap(escrow); setTitleFeesMap(title);
+    setSaveStatus("idle");
   }, [savedEntries]);
 
   const handleMonthChange = (year: number, month: number) => {
@@ -622,7 +711,10 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   const monthAlreadySaved = REPS.some(r => getSaved(r.name));
 
   const totals = REPS.reduce((acc, rep) => {
-    const gross    = parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0;
+    const isSarahTotals = rep.name === "Sarah Perkins";
+    const gross = isSarahTotals
+      ? (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0)
+      : (parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0);
     const res      = parseInt(resales[rep.name]) || 0;
     const empM      = getEmpMonth(rep, selYear, selMonth);
     const commBase  = rep.getCommBase(empM);
@@ -633,11 +725,15 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
     return { revenue: acc.revenue + gross, commission: acc.commission + commission };
   }, { revenue: 0, commission: 0 });
 
-  const hasInput = REPS.some(r => parseFloat(revenues[r.name]?.replace(/[^0-9.]/g,"")) > 0);
+  const sarahGross = (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0);
+  const hasInput = REPS.some(r => r.name === "Sarah Perkins" ? sarahGross > 0 : parseFloat(revenues[r.name]?.replace(/[^0-9.]/g,"")) > 0);
 
   const handleSave = () => {
     const entries: SavedEntry[] = REPS.map(rep => {
-      const gross      = parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0;
+      const isSarahSave = rep.name === "Sarah Perkins";
+      const escrowAmt  = isSarahSave ? (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) : 0;
+      const titleAmt   = isSarahSave ? (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,""))  || 0) : 0;
+      const gross      = isSarahSave ? escrowAmt + titleAmt : (parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0);
       const res        = parseInt(resales[rep.name]) || 0;
       const tc         = parseInt(totalCloseds[rep.name]) || 0;
       const empM       = getEmpMonth(rep, selYear, selMonth);
@@ -647,7 +743,12 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
       const commission = rep.name === "Hannah Pfleiger"
         ? calcHannahCommission(gross).commission
         : calcCommission(gross, res, commBase, resaleDed).commission;
-      return { repName: rep.name, year: selYear, month: selMonth, grossRevenue: gross, closedResale: res, totalClosed: tc, commission, commBase, guarantee, empMonth: empM, resaleDeductionAmt: resaleDed };
+      return {
+        repName: rep.name, year: selYear, month: selMonth, grossRevenue: gross,
+        closedResale: res, totalClosed: tc, commission, commBase, guarantee,
+        empMonth: empM, resaleDeductionAmt: resaleDed,
+        ...(isSarahSave ? { escrowFees: escrowAmt, titleFees: titleAmt } : {}),
+      };
     });
     onSaveMonth(entries);
     setSaveStatus("saved");
@@ -711,9 +812,13 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
             key={rep.name} rep={rep} year={selYear} month={selMonth}
             revenue={revenues[rep.name] ?? ""} resale={resales[rep.name] ?? ""}
             totalClosed={totalCloseds[rep.name] ?? ""}
+            escrowFees={escrowFeesMap[rep.name] ?? ""}
+            titleFees={titleFeesMap[rep.name]  ?? ""}
             onRevenueChange    ={v => setRevenues    (prev => ({...prev, [rep.name]: v}))}
             onResaleChange     ={v => setResales     (prev => ({...prev, [rep.name]: v}))}
             onTotalClosedChange={v => setTotalCloseds(prev => ({...prev, [rep.name]: v}))}
+            onEscrowFeesChange ={v => setEscrowFeesMap(prev => ({...prev, [rep.name]: v}))}
+            onTitleFeesChange  ={v => setTitleFeesMap (prev => ({...prev, [rep.name]: v}))}
             savedEntry={getSaved(rep.name)}
           />
         ))}
@@ -1068,6 +1173,8 @@ export default function CommissionDashboard() {
               grossRevenue: row.grossRevenue, closedResale: row.closedResale ?? 0,
               totalClosed: row.totalClosed ?? 0, commission: row.commission,
               commBase, guarantee, empMonth, resaleDeductionAmt: resaleDed,
+              escrowFees: row.escrowFees ?? 0,
+              titleFees:  row.titleFees  ?? 0,
             };
           });
           setSavedEntries(entries);
@@ -1101,6 +1208,8 @@ export default function CommissionDashboard() {
               repName: e.repName, year: e.year, month: e.month,
               grossRevenue: e.grossRevenue, closedResale: e.closedResale,
               commission: e.commission, employmentMonth: e.empMonth,
+              ...(e.escrowFees !== undefined ? { escrowFees: e.escrowFees } : {}),
+              ...(e.titleFees  !== undefined ? { titleFees:  e.titleFees  } : {}),
             }),
           })
         )

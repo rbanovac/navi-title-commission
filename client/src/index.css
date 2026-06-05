@@ -347,6 +347,20 @@ button { cursor: pointer; background: none; border: none; }
 .calc-input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 .calc-input[type="number"] { -moz-appearance: textfield; }
 
+/* Sarah Perkins — Total Revenue read-only display */
+.sarah-total-display {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-offset));
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  padding: 8px 12px;
+  cursor: default;
+}
+.sarah-total-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: -0.3px;
+}
+
 /* Month override */
 .month-override {
   display: flex;

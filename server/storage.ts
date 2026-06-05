@@ -9,7 +9,7 @@ sqlite.pragma("journal_mode = WAL");
 
 export const db = drizzle(sqlite);
 
-// Ensure monthly_data table exists
+// Ensure monthly_data table exists and has all columns (safe migrations)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS monthly_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,9 +23,14 @@ sqlite.exec(`
     employment_month INTEGER NOT NULL DEFAULT 1,
     comm_base REAL NOT NULL DEFAULT 0,
     guarantee REAL NOT NULL DEFAULT 0,
-    resale_deduction_amt REAL NOT NULL DEFAULT 250
+    resale_deduction_amt REAL NOT NULL DEFAULT 250,
+    escrow_fees REAL DEFAULT 0,
+    title_fees REAL DEFAULT 0
   )
 `);
+// Add columns to existing DBs that predate this feature
+try { sqlite.exec(`ALTER TABLE monthly_data ADD COLUMN escrow_fees REAL DEFAULT 0`); } catch {}
+try { sqlite.exec(`ALTER TABLE monthly_data ADD COLUMN title_fees REAL DEFAULT 0`); } catch {}
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -70,12 +75,13 @@ export class DatabaseStorage implements IStorage {
 
     if (existing) {
       sqlite.prepare(`
-        UPDATE monthly_data SET gross_revenue=?, closed_resale=?, total_closed=?, commission=?, employment_month=?, comm_base=?, guarantee=?, resale_deduction_amt=?
+        UPDATE monthly_data SET gross_revenue=?, closed_resale=?, total_closed=?, commission=?, employment_month=?, comm_base=?, guarantee=?, resale_deduction_amt=?, escrow_fees=?, title_fees=?
         WHERE rep_name=? AND year=? AND month=?
       `).run(
         data.grossRevenue, data.closedResale, (data as any).totalClosed ?? 0,
         data.commission, data.employmentMonth,
         (data as any).commBase ?? 0, (data as any).guarantee ?? 0, (data as any).resaleDeductionAmt ?? 250,
+        (data as any).escrowFees ?? 0, (data as any).titleFees ?? 0,
         data.repName, data.year, data.month
       );
       return db.select().from(monthlyData)
