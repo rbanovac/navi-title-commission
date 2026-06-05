@@ -94,6 +94,9 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const REP_COLORS  = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899","#14b8a6"];
 
+// Reps that use the split Escrow Fees + Title Fees input instead of a single revenue field
+const SPLIT_REVENUE_REPS = new Set(["Sarah Perkins", "Joanna Jones"]);
+
 // Per-rep resale deduction (default $250; Sarah Perkins is $75; Hannah Pfleiger is $0)
 const RESALE_DEDUCTION: Record<string, number> = { "Sarah Perkins": 75, "Hannah Pfleiger": 0 };
 function getResaleDed(repName: string) { return RESALE_DEDUCTION[repName] ?? 250; }
@@ -149,7 +152,7 @@ interface SavedEntry {
   guarantee: number;
   empMonth: number;
   resaleDeductionAmt?: number;
-  // Sarah Perkins revenue split
+  // Split revenue (Sarah Perkins & Joanna Jones)
   escrowFees?: number;
   titleFees?: number;
 }
@@ -177,7 +180,7 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
 
   const color = REP_COLORS[REPS.findIndex(r => r.name === rep.name)] ?? "#3b82f6";
 
-  const isSarahPDF = rep.name === "Sarah Perkins";
+  const isSarahPDF = SPLIT_REVENUE_REPS.has(rep.name);
   const rows = repEntries.map(e => {
     const rda       = e.resaleDeductionAmt ?? getResaleDed(e.repName);
     const resaleDed = e.closedResale * rda;
@@ -324,7 +327,7 @@ function exportAccountingPDF(month: number, year: number, entries: SavedEntry[])
     if (!e) return `<tr style="color:#9ca3af"><td>${rep.name}</td><td colspan="5" style="text-align:center;font-size:12px">No data for this period</td></tr>`;
     const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
     const rda = e.resaleDeductionAmt ?? getResaleDed(e.repName);
-    const revCell = rep.name === "Sarah Perkins" && (e.escrowFees || e.titleFees)
+    const revCell = SPLIT_REVENUE_REPS.has(rep.name) && (e.escrowFees || e.titleFees)
       ? `<td><strong>${fmtD(e.grossRevenue)}</strong><br/><span style="font-size:10px;color:#6b7280">Escrow ${fmtD(e.escrowFees??0)} + Title ${fmtD(e.titleFees??0)}</span></td>`
       : `<td>${fmtD(e.grossRevenue)}</td>`;
     return `
@@ -457,7 +460,7 @@ interface RepRowProps {
 }
 
 function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, titleFees, onRevenueChange, onResaleChange, onTotalClosedChange, onEscrowFeesChange, onTitleFeesChange, savedEntry }: RepRowProps) {
-  const isSarah = rep.name === "Sarah Perkins";
+  const isSarah = SPLIT_REVENUE_REPS.has(rep.name);
   const [expanded, setExpanded] = useState(false);
   const empMonth  = getEmpMonth(rep, year, month);
   const commBase  = rep.getCommBase(empMonth);
@@ -508,7 +511,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
 
       <div className="input-grid">
         {isSarah ? (
-          // Sarah Perkins: split Escrow Fees + Title Fees → sum = Total Revenue
+          // Split revenue reps (Sarah Perkins, Joanna Jones): Escrow Fees + Title Fees → sum = Total Revenue
           <>
             <div className="input-group">
               <label className="input-label">Escrow Fees</label>
@@ -660,9 +663,9 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   const [revenues,     setRevenues]     = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
   const [resales,      setResales]      = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
   const [totalCloseds, setTotalCloseds] = useState<Record<string,string>>(() => Object.fromEntries(REPS.map(r=>[r.name,""])));
-  // Sarah Perkins split revenue fields
-  const [escrowFeesMap, setEscrowFeesMap] = useState<Record<string,string>>({"Sarah Perkins": ""});
-  const [titleFeesMap,  setTitleFeesMap]  = useState<Record<string,string>>({"Sarah Perkins": ""});
+  // Split revenue fields (Sarah Perkins & Joanna Jones)
+  const [escrowFeesMap, setEscrowFeesMap] = useState<Record<string,string>>({"Sarah Perkins": "", "Joanna Jones": ""});
+  const [titleFeesMap,  setTitleFeesMap]  = useState<Record<string,string>>({"Sarah Perkins": "", "Joanna Jones": ""});
   const [saveStatus, setSaveStatus] = useState<"idle"|"saved">("idle");
 
   const loadMonth = useCallback((year: number, month: number) => {
@@ -684,15 +687,15 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
       }
       res[rep.name] = e ? String(e.closedResale) : "";
       tc[rep.name]  = e ? String(e.totalClosed ?? "") : "";
-      if (rep.name === "Sarah Perkins") {
+      if (SPLIT_REVENUE_REPS.has(rep.name)) {
         const fmtField = (v?: number) => {
           if (!v) return "";
           return v % 1 !== 0
             ? v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
             : v.toLocaleString("en-US",{maximumFractionDigits:0});
         };
-        escrow["Sarah Perkins"] = fmtField(e?.escrowFees);
-        title["Sarah Perkins"]  = fmtField(e?.titleFees);
+        escrow[rep.name] = fmtField(e?.escrowFees);
+        title[rep.name]  = fmtField(e?.titleFees);
       }
     });
     setRevenues(rev); setResales(res); setTotalCloseds(tc);
@@ -711,9 +714,9 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   const monthAlreadySaved = REPS.some(r => getSaved(r.name));
 
   const totals = REPS.reduce((acc, rep) => {
-    const isSarahTotals = rep.name === "Sarah Perkins";
-    const gross = isSarahTotals
-      ? (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0)
+    const isSplitTotals = SPLIT_REVENUE_REPS.has(rep.name);
+    const gross = isSplitTotals
+      ? (parseFloat(escrowFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0)
       : (parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0);
     const res      = parseInt(resales[rep.name]) || 0;
     const empM      = getEmpMonth(rep, selYear, selMonth);
@@ -725,15 +728,19 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
     return { revenue: acc.revenue + gross, commission: acc.commission + commission };
   }, { revenue: 0, commission: 0 });
 
-  const sarahGross = (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0);
-  const hasInput = REPS.some(r => r.name === "Sarah Perkins" ? sarahGross > 0 : parseFloat(revenues[r.name]?.replace(/[^0-9.]/g,"")) > 0);
+  const hasInput = REPS.some(r => {
+    if (SPLIT_REVENUE_REPS.has(r.name)) {
+      return (parseFloat(escrowFeesMap[r.name]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap[r.name]?.replace(/[^0-9.]/g,"")) || 0) > 0;
+    }
+    return parseFloat(revenues[r.name]?.replace(/[^0-9.]/g,"")) > 0;
+  });
 
   const handleSave = () => {
     const entries: SavedEntry[] = REPS.map(rep => {
-      const isSarahSave = rep.name === "Sarah Perkins";
-      const escrowAmt  = isSarahSave ? (parseFloat(escrowFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,"")) || 0) : 0;
-      const titleAmt   = isSarahSave ? (parseFloat(titleFeesMap["Sarah Perkins"]?.replace(/[^0-9.]/g,""))  || 0) : 0;
-      const gross      = isSarahSave ? escrowAmt + titleAmt : (parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0);
+      const isSplitSave = SPLIT_REVENUE_REPS.has(rep.name);
+      const escrowAmt  = isSplitSave ? (parseFloat(escrowFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0) : 0;
+      const titleAmt   = isSplitSave ? (parseFloat(titleFeesMap[rep.name]?.replace(/[^0-9.]/g,""))  || 0) : 0;
+      const gross      = isSplitSave ? escrowAmt + titleAmt : (parseFloat(revenues[rep.name]?.replace(/[^0-9.]/g,"")) || 0);
       const res        = parseInt(resales[rep.name]) || 0;
       const tc         = parseInt(totalCloseds[rep.name]) || 0;
       const empM       = getEmpMonth(rep, selYear, selMonth);
@@ -747,7 +754,7 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
         repName: rep.name, year: selYear, month: selMonth, grossRevenue: gross,
         closedResale: res, totalClosed: tc, commission, commBase, guarantee,
         empMonth: empM, resaleDeductionAmt: resaleDed,
-        ...(isSarahSave ? { escrowFees: escrowAmt, titleFees: titleAmt } : {}),
+        ...(isSplitSave ? { escrowFees: escrowAmt, titleFees: titleAmt } : {}),
       };
     });
     onSaveMonth(entries);
