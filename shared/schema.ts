@@ -27,9 +27,11 @@ export const monthlyData = sqliteTable("monthly_data", {
   // Computed & stored for fast charting
   commission: real("commission").notNull().default(0),
   employmentMonth: integer("employment_month").notNull().default(1),
-  // Sarah Perkins revenue split
+  // Sarah Perkins / Joanna Jones revenue split
   escrowFees: real("escrow_fees").default(0),
   titleFees: real("title_fees").default(0),
+  // Hannah Pfleiger capture rate (percentage, e.g. 42.5 = 42.5%)
+  captureRate: real("capture_rate"),
 });
 
 export const insertMonthlyDataSchema = createInsertSchema(monthlyData).omit({ id: true });

@@ -155,6 +155,8 @@ interface SavedEntry {
   // Split revenue (Sarah Perkins & Joanna Jones)
   escrowFees?: number;
   titleFees?: number;
+  // Hannah Pfleiger capture rate (%)
+  captureRate?: number | null;
 }
 
 // ─── Print / Export Helpers ────────────────────────────────────────────────────
@@ -198,6 +200,7 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
         <td>${e.commBase > 0 ? fmt(e.commBase) : e.guarantee > 0 ? `${fmt(e.guarantee)} draw` : "—"}</td>
         <td>${fmtD(commable)}</td>
         <td class="highlight">${fmtD(e.commission)}</td>
+        ${rep.name === "Hannah Pfleiger" ? `<td style="text-align:center">${e.captureRate != null ? e.captureRate.toFixed(1) + "%" : "—"}</td>` : ""}
       </tr>`;
   }).join("");
 
@@ -284,12 +287,30 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
     </svg>
   </div>
 
+  ${rep.name === "Hannah Pfleiger" ? (() => {
+    const crEntries = repEntries.filter(e => e.captureRate != null);
+    if (!crEntries.length) return "";
+    const qMap: Record<string,number[]> = {};
+    crEntries.forEach(e => {
+      const q = `${e.year} Q${Math.ceil(e.month/3)}`;
+      if (!qMap[q]) qMap[q] = [];
+      qMap[q].push(e.captureRate!);
+    });
+    const qCards = Object.entries(qMap).sort(([a],[b])=>a.localeCompare(b)).map(([q,rates]) => {
+      const avg = (rates.reduce((s,r)=>s+r,0)/rates.length).toFixed(1);
+      return `<div class="cr-card"><div class="cr-label">${q}</div><div class="cr-avg">${avg}%</div><div class="cr-sub">${rates.length} month${rates.length!==1?"s":""} avg</div></div>`;
+    }).join("");
+    return `<div style="margin-bottom:24px"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px">Quarterly Capture Rate</div><div style="display:flex;gap:12px;flex-wrap:wrap">${qCards}</div></div>
+    <style>.cr-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;min-width:100px;flex:1;border-top:3px solid ${color}}.cr-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:4px}.cr-avg{font-size:24px;font-weight:800;color:${color};letter-spacing:-0.5px;line-height:1}.cr-sub{font-size:10px;color:#9ca3af;margin-top:3px}</style>`;
+  })() : ""}
+
   <table>
     <thead>
       <tr>
         <th>Period</th>
         ${isSarahPDF ? "<th>Escrow Fees</th><th>Title Fees</th><th>Total Revenue</th>" : "<th>Gross Revenue</th>"}
         <th>Total Closed</th><th>Resale Adj.</th><th>Base / Draw</th><th>Commissionable</th><th>Commission</th>
+        ${rep.name === "Hannah Pfleiger" ? "<th>Capture Rate</th>" : ""}
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -451,15 +472,17 @@ interface RepRowProps {
   totalClosed: string;
   escrowFees: string;
   titleFees: string;
+  captureRate: string;
   onRevenueChange:     (v: string) => void;
   onResaleChange:      (v: string) => void;
   onTotalClosedChange: (v: string) => void;
   onEscrowFeesChange:  (v: string) => void;
   onTitleFeesChange:   (v: string) => void;
+  onCaptureRateChange: (v: string) => void;
   savedEntry?: SavedEntry;
 }
 
-function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, titleFees, onRevenueChange, onResaleChange, onTotalClosedChange, onEscrowFeesChange, onTitleFeesChange, savedEntry }: RepRowProps) {
+function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, titleFees, captureRate, onRevenueChange, onResaleChange, onTotalClosedChange, onEscrowFeesChange, onTitleFeesChange, onCaptureRateChange, savedEntry }: RepRowProps) {
   const isSarah = SPLIT_REVENUE_REPS.has(rep.name);
   const [expanded, setExpanded] = useState(false);
   const empMonth  = getEmpMonth(rep, year, month);
@@ -606,6 +629,16 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
               onChange={e => onTotalClosedChange(e.target.value)}/>
           </div>
         </div>
+        {isHannah && (
+          <div className="input-group">
+            <label className="input-label">Capture Rate %</label>
+            <div className="input-wrapper">
+              <input type="number" className="calc-input" placeholder="0.00" min="0" max="100" step="0.01" value={captureRate}
+                onChange={e => onCaptureRateChange(e.target.value)}/>
+              <span className="input-suffix">%</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {gross > 0 && (
@@ -666,6 +699,8 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   // Split revenue fields (Sarah Perkins & Joanna Jones)
   const [escrowFeesMap, setEscrowFeesMap] = useState<Record<string,string>>({"Sarah Perkins": "", "Joanna Jones": ""});
   const [titleFeesMap,  setTitleFeesMap]  = useState<Record<string,string>>({"Sarah Perkins": "", "Joanna Jones": ""});
+  // Hannah Pfleiger capture rate
+  const [captureRateMap, setCaptureRateMap] = useState<Record<string,string>>({"Hannah Pfleiger": ""});
   const [saveStatus, setSaveStatus] = useState<"idle"|"saved">("idle");
 
   const loadMonth = useCallback((year: number, month: number) => {
@@ -698,8 +733,12 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
         title[rep.name]  = fmtField(e?.titleFees);
       }
     });
+    const cr: Record<string,string> = {};
+    const hannahEntry = savedEntries.find(s => s.repName==="Hannah Pfleiger" && s.year===year && s.month===month);
+    cr["Hannah Pfleiger"] = hannahEntry?.captureRate != null ? String(hannahEntry.captureRate) : "";
     setRevenues(rev); setResales(res); setTotalCloseds(tc);
     setEscrowFeesMap(escrow); setTitleFeesMap(title);
+    setCaptureRateMap(cr);
     setSaveStatus("idle");
   }, [savedEntries]);
 
@@ -750,11 +789,15 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
       const commission = rep.name === "Hannah Pfleiger"
         ? calcHannahCommission(gross).commission
         : calcCommission(gross, res, commBase, resaleDed).commission;
+      const captureRateVal = rep.name === "Hannah Pfleiger"
+        ? (parseFloat(captureRateMap["Hannah Pfleiger"]) || null)
+        : null;
       return {
         repName: rep.name, year: selYear, month: selMonth, grossRevenue: gross,
         closedResale: res, totalClosed: tc, commission, commBase, guarantee,
         empMonth: empM, resaleDeductionAmt: resaleDed,
         ...(isSplitSave ? { escrowFees: escrowAmt, titleFees: titleAmt } : {}),
+        ...(rep.name === "Hannah Pfleiger" ? { captureRate: captureRateVal } : {}),
       };
     });
     onSaveMonth(entries);
@@ -821,11 +864,13 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
             totalClosed={totalCloseds[rep.name] ?? ""}
             escrowFees={escrowFeesMap[rep.name] ?? ""}
             titleFees={titleFeesMap[rep.name]  ?? ""}
+            captureRate={captureRateMap[rep.name] ?? ""}
             onRevenueChange    ={v => setRevenues    (prev => ({...prev, [rep.name]: v}))}
             onResaleChange     ={v => setResales     (prev => ({...prev, [rep.name]: v}))}
             onTotalClosedChange={v => setTotalCloseds(prev => ({...prev, [rep.name]: v}))}
             onEscrowFeesChange ={v => setEscrowFeesMap(prev => ({...prev, [rep.name]: v}))}
             onTitleFeesChange  ={v => setTitleFeesMap (prev => ({...prev, [rep.name]: v}))}
+            onCaptureRateChange={v => setCaptureRateMap(prev => ({...prev, [rep.name]: v}))}
             savedEntry={getSaved(rep.name)}
           />
         ))}
@@ -1042,13 +1087,52 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
         </>
       )}
 
+      {/* Hannah capture rate quarterly summary */}
+      {(() => {
+        const hannahEntries = savedEntries.filter(e => e.repName === "Hannah Pfleiger" && e.captureRate != null);
+        if (hannahEntries.length === 0) return null;
+        // Group by year, then quarter
+        const byYearQuarter: Record<string, { label: string; months: number[]; rates: number[] }> = {};
+        hannahEntries.forEach(e => {
+          const q = Math.ceil(e.month / 3);
+          const key = `${e.year}-Q${q}`;
+          if (!byYearQuarter[key]) byYearQuarter[key] = { label: `${e.year} Q${q}`, months: [], rates: [] };
+          byYearQuarter[key].months.push(e.month);
+          byYearQuarter[key].rates.push(e.captureRate!);
+        });
+        const quarters = Object.entries(byYearQuarter).sort(([a],[b])=>a.localeCompare(b));
+        return (
+          <div className="chart-section">
+            <h3 className="chart-title">Hannah Pfleiger — Capture Rate</h3>
+            <div className="capture-rate-grid">
+              {quarters.map(([key, {label, rates}]) => {
+                const avg = rates.reduce((s,r)=>s+r,0)/rates.length;
+                const hannahColor = REP_COLORS[REPS.findIndex(r=>r.name==="Hannah Pfleiger")] ?? "#14b8a6";
+                return (
+                  <div className="capture-rate-card" key={key}>
+                    <div className="capture-rate-label">{label}</div>
+                    <div className="capture-rate-avg" style={{color: hannahColor}}>{avg.toFixed(1)}%</div>
+                    <div className="capture-rate-sub">{rates.length} month{rates.length!==1?"s":""} avg</div>
+                    <div className="capture-rate-months">
+                      {rates.map((r,i) => (
+                        <span key={i} className="capture-rate-month-chip">{r.toFixed(1)}%</span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* History table */}
       <div className="chart-section">
         <h3 className="chart-title">Monthly History</h3>
         <div className="history-table-wrapper">
           <table className="history-table">
             <thead>
-              <tr><th>Rep</th><th>Period</th><th>Gross Revenue</th><th>Total Closed</th><th>Resale</th><th>Base / Draw</th><th>Commission</th><th>Emp. Mo.</th><th></th></tr>
+              <tr><th>Rep</th><th>Period</th><th>Gross Revenue</th><th>Total Closed</th><th>Resale</th><th>Base / Draw</th><th>Commission</th><th>Capture Rate</th><th>Emp. Mo.</th><th></th></tr>
             </thead>
             <tbody>
               {tableRows.map((row,i) => {
@@ -1075,6 +1159,7 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
                     <td className="td-num">{row.closedResale}</td>
                     <td className="td-num">{baseDisplay}</td>
                     <td className="td-num td-commission">{fmt(row.commission)}</td>
+                    <td className="td-num">{row.repName==="Hannah Pfleiger" && row.captureRate != null ? `${row.captureRate.toFixed(1)}%` : "—"}</td>
                     <td className="td-num">{row.empMonth}</td>
                     <td>
                       <button className="delete-btn" title="Delete"
@@ -1182,6 +1267,7 @@ export default function CommissionDashboard() {
               commBase, guarantee, empMonth, resaleDeductionAmt: resaleDed,
               escrowFees: row.escrowFees ?? 0,
               titleFees:  row.titleFees  ?? 0,
+              captureRate: row.captureRate ?? null,
             };
           });
           setSavedEntries(entries);
@@ -1217,6 +1303,7 @@ export default function CommissionDashboard() {
               commission: e.commission, employmentMonth: e.empMonth,
               ...(e.escrowFees !== undefined ? { escrowFees: e.escrowFees } : {}),
               ...(e.titleFees  !== undefined ? { titleFees:  e.titleFees  } : {}),
+              ...(e.captureRate != null ? { captureRate: e.captureRate } : {}),
             }),
           })
         )

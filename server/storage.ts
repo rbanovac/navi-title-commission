@@ -31,6 +31,7 @@ sqlite.exec(`
 // Add columns to existing DBs that predate this feature
 try { sqlite.exec(`ALTER TABLE monthly_data ADD COLUMN escrow_fees REAL DEFAULT 0`); } catch {}
 try { sqlite.exec(`ALTER TABLE monthly_data ADD COLUMN title_fees REAL DEFAULT 0`); } catch {}
+try { sqlite.exec(`ALTER TABLE monthly_data ADD COLUMN capture_rate REAL`); } catch {}
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -75,13 +76,14 @@ export class DatabaseStorage implements IStorage {
 
     if (existing) {
       sqlite.prepare(`
-        UPDATE monthly_data SET gross_revenue=?, closed_resale=?, total_closed=?, commission=?, employment_month=?, comm_base=?, guarantee=?, resale_deduction_amt=?, escrow_fees=?, title_fees=?
+        UPDATE monthly_data SET gross_revenue=?, closed_resale=?, total_closed=?, commission=?, employment_month=?, comm_base=?, guarantee=?, resale_deduction_amt=?, escrow_fees=?, title_fees=?, capture_rate=?
         WHERE rep_name=? AND year=? AND month=?
       `).run(
         data.grossRevenue, data.closedResale, (data as any).totalClosed ?? 0,
         data.commission, data.employmentMonth,
         (data as any).commBase ?? 0, (data as any).guarantee ?? 0, (data as any).resaleDeductionAmt ?? 250,
         (data as any).escrowFees ?? 0, (data as any).titleFees ?? 0,
+        (data as any).captureRate ?? null,
         data.repName, data.year, data.month
       );
       return db.select().from(monthlyData)
