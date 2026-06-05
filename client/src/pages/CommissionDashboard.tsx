@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   DollarSign, TrendingUp, Users, ChevronDown, ChevronUp,
   Moon, Sun, BarChart2, Calculator, Save, CheckCircle2, Trash2,
@@ -952,6 +952,44 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
   );
 }
 
+// ─── API Config ────────────────────────────────────────────────────────────────
+const API_BASE = "https://commission-api-production-0d7c.up.railway.app";
+
+const SPR_SEED: Array<{ repName: string; year: number; month: number; grossRevenue: number }> = [
+  { repName: "Joanna Jones",   year: 2026, month: 1, grossRevenue: 326821.90 },
+  { repName: "Joanna Jones",   year: 2026, month: 2, grossRevenue: 421380.60 },
+  { repName: "Joanna Jones",   year: 2026, month: 3, grossRevenue: 425223.90 },
+  { repName: "Rachael Turner", year: 2026, month: 1, grossRevenue: 283904.70 },
+  { repName: "Rachael Turner", year: 2026, month: 2, grossRevenue: 240292.60 },
+  { repName: "Rachael Turner", year: 2026, month: 3, grossRevenue: 400026.20 },
+  { repName: "Jackie Jarquin", year: 2026, month: 1, grossRevenue: 195705.60 },
+  { repName: "Jackie Jarquin", year: 2026, month: 2, grossRevenue: 254606.09 },
+  { repName: "Jackie Jarquin", year: 2026, month: 3, grossRevenue: 274494.70 },
+  { repName: "Tricia Shipley", year: 2026, month: 1, grossRevenue: 69262.20 },
+  { repName: "Tricia Shipley", year: 2026, month: 2, grossRevenue: 126801.65 },
+  { repName: "Tricia Shipley", year: 2026, month: 3, grossRevenue: 141208.30 },
+  { repName: "Carrie Shuler",  year: 2026, month: 2, grossRevenue: 31995.20 },
+  { repName: "Carrie Shuler",  year: 2026, month: 3, grossRevenue: 30384.50 },
+  { repName: "Sarah Perkins",  year: 2026, month: 1, grossRevenue: 211087.74 },
+  { repName: "Sarah Perkins",  year: 2026, month: 2, grossRevenue: 214527.90 },
+  { repName: "Sarah Perkins",  year: 2026, month: 3, grossRevenue: 246857.90 },
+];
+
+function buildSeedEntries(): SavedEntry[] {
+  return SPR_SEED.map(d => {
+    const rep       = REPS.find(r => r.name === d.repName)!;
+    const empMonth  = getEmpMonth(rep, d.year, d.month);
+    const commBase  = rep.getCommBase(empMonth);
+    const guarantee = rep.getGuarantee(empMonth);
+    const resaleDed = getResaleDed(d.repName);
+    const commission = d.repName === "Hannah Pfleiger"
+      ? calcHannahCommission(d.grossRevenue).commission
+      : calcCommission(d.grossRevenue, 0, commBase, resaleDed).commission;
+    return { repName: d.repName, year: d.year, month: d.month, grossRevenue: d.grossRevenue,
+             closedResale: 0, totalClosed: 0, commission, commBase, guarantee, empMonth, resaleDeductionAmt: resaleDed };
+  });
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 
 export default function CommissionDashboard() {
@@ -959,44 +997,54 @@ export default function CommissionDashboard() {
     typeof window!=="undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
   );
   const [activeTab, setActiveTab] = useState<"calculator"|"charts">("calculator");
+  const [savedEntries, setSavedEntries] = useState<SavedEntry[]>(buildSeedEntries());
+  const [apiStatus, setApiStatus]       = useState<"loading"|"connected"|"offline">("loading");
+  const seededRef = useRef(false);
 
-  // Seed Jan–Mar 2026 SPR data (0 resale deductions — user corrects via Calculator tab)
-  const [savedEntries, setSavedEntries] = useState<SavedEntry[]>(() => {
-    const sprData: Array<{ repName: string; year: number; month: number; grossRevenue: number }> = [
-      { repName: "Joanna Jones",     year: 2026, month: 1, grossRevenue: 326821.90 },
-      { repName: "Joanna Jones",     year: 2026, month: 2, grossRevenue: 421380.60 },
-      { repName: "Joanna Jones",     year: 2026, month: 3, grossRevenue: 425223.90 },
-      { repName: "Rachael Turner",   year: 2026, month: 1, grossRevenue: 283904.70 },
-      { repName: "Rachael Turner",   year: 2026, month: 2, grossRevenue: 240292.60 },
-      { repName: "Rachael Turner",   year: 2026, month: 3, grossRevenue: 400026.20 },
-      { repName: "Jackie Jarquin",   year: 2026, month: 1, grossRevenue: 195705.60 },
-      { repName: "Jackie Jarquin",   year: 2026, month: 2, grossRevenue: 254606.09 },
-      { repName: "Jackie Jarquin",   year: 2026, month: 3, grossRevenue: 274494.70 },
-      { repName: "Tricia Shipley",   year: 2026, month: 1, grossRevenue: 69262.20 },
-      { repName: "Tricia Shipley",   year: 2026, month: 2, grossRevenue: 126801.65 },
-      { repName: "Tricia Shipley",   year: 2026, month: 3, grossRevenue: 141208.30 },
-      { repName: "Carrie Shuler",    year: 2026, month: 2, grossRevenue: 31995.20 },
-      { repName: "Carrie Shuler",    year: 2026, month: 3, grossRevenue: 30384.50 },
-      { repName: "Sarah Perkins",    year: 2026, month: 1, grossRevenue: 211087.74 },
-      { repName: "Sarah Perkins",    year: 2026, month: 2, grossRevenue: 214527.90 },
-      { repName: "Sarah Perkins",    year: 2026, month: 3, grossRevenue: 246857.90 },
-    ];
-    return sprData.map(d => {
-      const rep       = REPS.find(r => r.name === d.repName)!;
-      const empMonth  = getEmpMonth(rep, d.year, d.month);
-      const commBase  = rep.getCommBase(empMonth);
-      const guarantee = rep.getGuarantee(empMonth);
-      const resaleDed = getResaleDed(d.repName);
-      const commission = d.repName === "Hannah Pfleiger"
-        ? calcHannahCommission(d.grossRevenue).commission
-        : calcCommission(d.grossRevenue, 0, commBase, resaleDed).commission;
-      return { repName: d.repName, year: d.year, month: d.month, grossRevenue: d.grossRevenue, closedResale: 0, totalClosed: 0, commission, commBase, guarantee, empMonth, resaleDeductionAmt: resaleDed };
-    });
-  });
-
-  useState(() => {
+  // Load from Railway backend on mount
+  useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
-  });
+
+    fetch(`${API_BASE}/api/monthly-data`)
+      .then(r => r.json())
+      .then((rows: any[]) => {
+        setApiStatus("connected");
+        if (rows.length === 0 && !seededRef.current) {
+          // First load — seed the SPR data into the DB
+          seededRef.current = true;
+          const seed = buildSeedEntries();
+          seed.forEach(e => {
+            fetch(`${API_BASE}/api/monthly-data`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                repName: e.repName, year: e.year, month: e.month,
+                grossRevenue: e.grossRevenue, closedResale: 0,
+                commission: e.commission, employmentMonth: e.empMonth,
+              }),
+            });
+          });
+          setSavedEntries(seed);
+        } else if (rows.length > 0) {
+          // Map DB rows back to SavedEntry shape
+          const entries: SavedEntry[] = rows.map((row: any) => {
+            const rep       = REPS.find(r => r.name === row.repName);
+            const empMonth  = row.employmentMonth ?? 1;
+            const commBase  = rep ? rep.getCommBase(empMonth) : row.commBase ?? 25000;
+            const guarantee = rep ? rep.getGuarantee(empMonth) : 0;
+            const resaleDed = getResaleDed(row.repName);
+            return {
+              repName: row.repName, year: row.year, month: row.month,
+              grossRevenue: row.grossRevenue, closedResale: row.closedResale ?? 0,
+              totalClosed: row.totalClosed ?? 0, commission: row.commission,
+              commBase, guarantee, empMonth, resaleDeductionAmt: resaleDed,
+            };
+          });
+          setSavedEntries(entries);
+        }
+      })
+      .catch(() => setApiStatus("offline"));
+  }, []);
 
   const toggleTheme = () => {
     setDarkMode(d => {
@@ -1005,16 +1053,36 @@ export default function CommissionDashboard() {
     });
   };
 
-  const handleSaveMonth = (entries: SavedEntry[]) => {
+  const handleSaveMonth = async (entries: SavedEntry[]) => {
+    // Update local state immediately
     setSavedEntries(prev => {
       const { year, month } = entries[0];
       const filtered = prev.filter(e => !(e.year===year && e.month===month));
       return [...filtered, ...entries.filter(e => e.grossRevenue > 0)];
     });
+    // Persist to Railway backend
+    if (apiStatus === "connected") {
+      await Promise.all(
+        entries.filter(e => e.grossRevenue > 0).map(e =>
+          fetch(`${API_BASE}/api/monthly-data`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              repName: e.repName, year: e.year, month: e.month,
+              grossRevenue: e.grossRevenue, closedResale: e.closedResale,
+              commission: e.commission, employmentMonth: e.empMonth,
+            }),
+          })
+        )
+      );
+    }
   };
 
-  const handleDelete = (repName: string, year: number, month: number) => {
+  const handleDelete = async (repName: string, year: number, month: number) => {
     setSavedEntries(prev => prev.filter(e => !(e.repName===repName && e.year===year && e.month===month)));
+    if (apiStatus === "connected") {
+      await fetch(`${API_BASE}/api/monthly-data/${encodeURIComponent(repName)}/${year}/${month}`, { method: "DELETE" });
+    }
   };
 
   return (

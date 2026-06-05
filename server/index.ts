@@ -8,6 +8,16 @@ import { createServer } from "node:http";
 const app = express();
 const httpServer = createServer(app);
 
+// CORS — allow the static frontend (served from perplexity.ai or pplx.app) to
+// call this Railway backend without being blocked by the browser's same-origin policy.
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
