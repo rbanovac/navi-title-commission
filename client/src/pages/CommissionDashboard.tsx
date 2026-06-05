@@ -127,7 +127,7 @@ function calcCommission(gross: number, resale: number, commBase: number, resaleD
   return { resaleDeduction: rd, afterDeduction: after, commissionable: comm, t10, t125, commission };
 }
 
-function fmt(v: number)  { return v.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}); }
+function fmt(v: number)  { return v.toLocaleString("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtD(v: number) { return v.toLocaleString("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtS(v: number) {
   if (v>=1e6) return `$${(v/1e6).toFixed(1)}M`;
@@ -458,7 +458,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, onRevenueChang
   else                     { baseLabel = `$${commBase.toLocaleString()} Base`;     baseColor = "color-green"; }
 
   const isDirty = savedEntry
-    ? Math.abs(savedEntry.grossRevenue - gross) > 0.5 || savedEntry.closedResale !== res
+    ? Math.abs(savedEntry.grossRevenue - gross) > 0.005 || savedEntry.closedResale !== res
     : gross > 0 || res > 0 || parseInt(totalClosed) > 0;
 
   return (
@@ -490,8 +490,30 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, onRevenueChang
             <span className="input-prefix">$</span>
             <input type="text" className="calc-input" placeholder="0" value={revenue}
               onChange={e => {
-                const v = e.target.value.replace(/[^0-9]/g,"");
-                onRevenueChange(v ? parseInt(v).toLocaleString() : "");
+                // Allow digits, one decimal point, and up to 2 decimal places
+                const raw = e.target.value.replace(/[^0-9.]/g,"");
+                // Prevent multiple decimal points
+                const parts = raw.split(".");
+                const cleaned = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : raw;
+                // Format integer part with commas, keep decimal portion as-is while typing
+                if (cleaned === "" || cleaned === ".") {
+                  onRevenueChange(cleaned);
+                } else if (cleaned.endsWith(".") || (cleaned.includes(".") && cleaned.endsWith("0"))) {
+                  // User is mid-typing decimal — format integer part only, preserve suffix
+                  const [intPart, decPart] = cleaned.split(".");
+                  const formatted = intPart ? parseInt(intPart).toLocaleString() + "." + (decPart ?? "") : "." + (decPart ?? "");
+                  onRevenueChange(formatted);
+                } else {
+                  const num = parseFloat(cleaned);
+                  if (!isNaN(num)) {
+                    // Only format as full currency when not mid-decimal-entry
+                    const [intPart, decPart] = cleaned.split(".");
+                    const formattedInt = parseInt(intPart || "0").toLocaleString();
+                    onRevenueChange(decPart !== undefined ? formattedInt + "." + decPart.slice(0, 2) : formattedInt);
+                  } else {
+                    onRevenueChange("");
+                  }
+                }
               }}/>
           </div>
         </div>
@@ -574,7 +596,15 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
     const tc:  Record<string,string> = {};
     REPS.forEach(rep => {
       const e = savedEntries.find(s => s.repName===rep.name && s.year===year && s.month===month);
-      rev[rep.name] = e ? e.grossRevenue.toLocaleString("en-US",{maximumFractionDigits:0}) : "";
+      // Preserve cents when loading saved revenue back into the input
+      if (e) {
+        const hasCents = e.grossRevenue % 1 !== 0;
+        rev[rep.name] = hasCents
+          ? e.grossRevenue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
+          : e.grossRevenue.toLocaleString("en-US",{maximumFractionDigits:0});
+      } else {
+        rev[rep.name] = "";
+      }
       res[rep.name] = e ? String(e.closedResale) : "";
       tc[rep.name]  = e ? String(e.totalClosed ?? "") : "";
     });
