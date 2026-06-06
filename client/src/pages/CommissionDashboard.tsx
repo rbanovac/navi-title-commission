@@ -94,7 +94,7 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const REP_COLORS  = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899","#14b8a6"];
 
-// Reps that use the split Escrow Fees + Title Fees input instead of a single revenue field
+// Reps that use the split Navi Revenue + JV Fees input instead of a single revenue field
 const SPLIT_REVENUE_REPS = new Set(["Sarah Perkins", "Joanna Jones"]);
 
 // Per-rep resale deduction (default $250; Sarah Perkins is $75; Hannah Pfleiger is $0)
@@ -189,7 +189,7 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
     const afterDed  = e.grossRevenue - resaleDed;
     const commable  = Math.max(0, afterDed - e.commBase);
     const revenueCell = isSarahPDF
-      ? `<td>${fmtD(e.escrowFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">Escrow</span></td><td>${fmtD(e.titleFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">Title</span></td><td><strong>${fmtD(e.grossRevenue)}</strong></td>`
+      ? `<td>${fmtD(e.escrowFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">Navi</span></td><td>${fmtD(e.titleFees ?? 0)}<br/><span style="font-size:10px;color:#6b7280">JV</span></td><td><strong>${fmtD(e.grossRevenue)}</strong></td>`
       : `<td>${fmtD(e.grossRevenue)}</td>`;
     return `
       <tr>
@@ -308,7 +308,7 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
     <thead>
       <tr>
         <th>Period</th>
-        ${isSarahPDF ? "<th>Escrow Fees</th><th>Title Fees</th><th>Total Revenue</th>" : "<th>Gross Revenue</th>"}
+        ${isSarahPDF ? "<th>Navi Revenue</th><th>JV Fees</th><th>Total Revenue</th>" : "<th>Gross Revenue</th>"}
         <th>Total Closed</th><th>Resale Adj.</th><th>Base / Draw</th><th>Commissionable</th><th>Commission</th>
         ${rep.name === "Hannah Pfleiger" ? "<th>Capture Rate</th>" : ""}
       </tr>
@@ -318,7 +318,7 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
       <tr class="totals">
         <td>Total</td>
         ${isSarahPDF
-          ? `<td>${fmtD(repEntries.reduce((s,e)=>s+(e.escrowFees??0),0))}</td><td>${fmtD(repEntries.reduce((s,e)=>s+(e.titleFees??0),0))}</td><td>${fmtD(totalRev)}</td>`
+          ? `<td>${fmtD(repEntries.reduce((s,e)=>s+(e.escrowFees??0),0))}</td><td>${fmtD(repEntries.reduce((s,e)=>s+(e.titleFees??0),0))}</td><td><strong>${fmtD(totalRev)}</strong></td>`
           : `<td>${fmtD(totalRev)}</td>`
         }
         <td>—</td><td>—</td><td>—</td>
@@ -349,7 +349,7 @@ function exportAccountingPDF(month: number, year: number, entries: SavedEntry[])
     const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
     const rda = e.resaleDeductionAmt ?? getResaleDed(e.repName);
     const revCell = SPLIT_REVENUE_REPS.has(rep.name) && (e.escrowFees || e.titleFees)
-      ? `<td><strong>${fmtD(e.grossRevenue)}</strong><br/><span style="font-size:10px;color:#6b7280">Escrow ${fmtD(e.escrowFees??0)} + Title ${fmtD(e.titleFees??0)}</span></td>`
+      ? `<td><strong>${fmtD(e.grossRevenue)}</strong><br/><span style="font-size:10px;color:#6b7280">Navi ${fmtD(e.escrowFees??0)} + JV ${fmtD(e.titleFees??0)}</span></td>`
       : `<td>${fmtD(e.grossRevenue)}</td>`;
     return `
       <tr>
@@ -534,10 +534,10 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
 
       <div className="input-grid">
         {isSarah ? (
-          // Split revenue reps (Sarah Perkins, Joanna Jones): Escrow Fees + Title Fees → sum = Total Revenue
+          // Split revenue reps (Sarah Perkins, Joanna Jones): Navi Revenue + JV Fees → sum = Total Revenue
           <>
             <div className="input-group">
-              <label className="input-label">Escrow Fees</label>
+              <label className="input-label">Navi Revenue</label>
               <div className="input-wrapper">
                 <span className="input-prefix">$</span>
                 <input type="text" className="calc-input" placeholder="0" value={escrowFees}
@@ -557,7 +557,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
               </div>
             </div>
             <div className="input-group">
-              <label className="input-label">Title Fees</label>
+              <label className="input-label">JV Fees</label>
               <div className="input-wrapper">
                 <span className="input-prefix">$</span>
                 <input type="text" className="calc-input" placeholder="0" value={titleFees}
