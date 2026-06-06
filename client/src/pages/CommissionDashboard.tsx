@@ -348,9 +348,59 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   const mainReps = REPS.filter(r => !SPR_OWN_SECTION.has(r.name));
   const ownReps  = REPS.filter(r =>  SPR_OWN_SECTION.has(r.name));
 
+  // Build 3-month window: [month-2, month-1, month]
+  const trendMonths: {y:number;m:number}[] = [];
+  for (let i = 2; i >= 0; i--) {
+    let m = month - i; let y = year;
+    if (m <= 0) { m += 12; y -= 1; }
+    trendMonths.push({y, m});
+  }
+
+  // Get revenue for a rep in a given period
+  const repRevAt = (repName: string, y: number, m: number) => {
+    const e = entries.find(e => e.repName===repName && e.year===y && e.month===m);
+    return e ? e.grossRevenue : null;
+  };
+
+  // Inline SVG sparkline (60×28): 3 points connected by a line, dots at each point
+  const sparkline = (repName: string) => {
+    const vals = trendMonths.map(({y,m}) => repRevAt(repName, y, m));
+    const hasData = vals.some(v => v !== null);
+    if (!hasData) return `<span style="font-size:10px;color:#9ca3af">—</span>`;
+    const filled = vals.map(v => v ?? 0);
+    const maxV = Math.max(...filled, 1);
+    const W = 72; const H = 28; const PAD = 4;
+    const xs = [PAD, W/2, W-PAD];
+    const ys = filled.map(v => H - PAD - ((v/maxV) * (H - PAD*2)));
+    // trend arrow: up/flat/down comparing last two non-null
+    const nonNull = vals.filter(v=>v!==null) as number[];
+    const last = nonNull[nonNull.length-1] ?? 0;
+    const prev = nonNull.length >= 2 ? nonNull[nonNull.length-2] : last;
+    const pct = prev > 0 ? ((last - prev) / prev * 100) : 0;
+    const arrowColor = pct > 1 ? "#16a34a" : pct < -1 ? "#dc2626" : "#6b7280";
+    const arrowLabel = pct > 1 ? `+${pct.toFixed(0)}%` : pct < -1 ? `${pct.toFixed(0)}%` : "flat";
+    const points = xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+    const dots = xs.map((x,i) => vals[i] !== null
+      ? `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="2.5" fill="#1e3a8a"/>`
+      : `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="2" fill="#d1d5db"/>`
+    ).join("");
+    const labels = trendMonths.map(({m},i) =>
+      `<text x="${xs[i].toFixed(1)}" y="${H+10}" text-anchor="middle" font-size="7" fill="#9ca3af">${MONTH_NAMES[m-1]}</text>`
+    ).join("");
+    return `<div style="display:inline-flex;align-items:center;gap:6px">
+      <svg width="${W}" height="${H+12}" style="overflow:visible">
+        <polyline points="${points}" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linejoin="round"/>
+        ${dots}
+        ${labels}
+      </svg>
+      <span style="font-size:10px;font-weight:700;color:${arrowColor};white-space:nowrap">${arrowLabel}</span>
+    </div>`;
+  };
+
   const makeRow = (rep: RepConfig) => {
     const e = monthEntries.find(e=>e.repName===rep.name);
-    const colspan = SPR_OWN_SECTION.has(rep.name) ? 5 : 4;
+    const isOwn = SPR_OWN_SECTION.has(rep.name);
+    const colspan = isOwn ? 6 : 5;
     if (!e) return `<tr style="color:#9ca3af"><td colspan="${colspan}" style="text-align:left;padding:11px 14px;font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d1d5db;margin-right:8px"></span>${rep.name} — no data</td></tr>`;
     const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
     const isSplit = SPLIT_REVENUE_REPS.has(rep.name);
@@ -368,6 +418,7 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
         <td style="text-align:center">${e.totalClosed ?? "—"}</td>
         <td style="text-align:center">${e.closedResale > 0 ? e.closedResale : "—"}</td>
         ${captureCell}
+        <td>${sparkline(rep.name)}</td>
       </tr>`;
   };
 
@@ -381,31 +432,34 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   const ownClosed    = ownReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name);  return s+(e?.totalClosed??0); },0);
   const ownResale    = ownReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name);  return s+(e?.closedResale??0); },0);
 
+  const trendLabel = trendMonths.map(({y,m}) => `${MONTH_NAMES[m-1]} ${y}`).join(" → ");
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
   <script>window.onload=function(){window.print();}<\/script>
   <title>Sales Production Report — ${MONTH_FULL[month-1]} ${year}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#111827;background:#fff;padding:40px 48px}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f766e;padding-bottom:20px;margin-bottom:28px}
-    .logo{font-size:22px;font-weight:800;color:#0f766e;letter-spacing:-0.5px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e3a8a;padding-bottom:20px;margin-bottom:28px}
+    .logo{font-size:22px;font-weight:800;color:#1e3a8a;letter-spacing:-0.5px}
     .logo-sub{font-size:11px;color:#6b7280;font-weight:500;margin-top:2px}
     .doc-title{text-align:right}
     .doc-title h1{font-size:20px;font-weight:700;color:#111827}
     .doc-title .sub{font-size:13px;color:#6b7280;margin-top:4px}
     .kpi-row{display:flex;gap:20px;margin-bottom:32px}
-    .kpi{flex:1;background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px 20px;border-top:3px solid #0f766e}
+    .kpi{flex:1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;border-top:3px solid #1e3a8a}
     .kpi-label{font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
     .kpi-value{font-size:22px;font-weight:700;color:#111827}
-    .kpi-value.accent{color:#0f766e}
+    .kpi-value.accent{color:#1e3a8a}
     .section-title{font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-    .badge{background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.5px}
+    .badge{background:#1e3a8a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.5px}
+    .trend-badge{background:#dbeafe;color:#1e3a8a;font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px;letter-spacing:0.3px}
     table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:28px}
-    th{background:#0f766e;color:#fff;padding:11px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-    td{padding:11px 14px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+    th{background:#1e3a8a;color:#fff;padding:11px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+    td{padding:10px 14px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
     tr:last-child td{border-bottom:none}
-    tr:hover td{background:#f9fafb}
-    .totals-row td{font-weight:700;background:#f0fdfa;border-top:2px solid #99f6e4;font-size:14px}
+    tr:hover td{background:#f8faff}
+    .totals-row td{font-weight:700;background:#eff6ff;border-top:2px solid #bfdbfe;font-size:14px}
     .footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
     @media print{body{padding:20px 24px}}
   </style></head><body>
@@ -442,7 +496,7 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   <div class="section-title">Team Production <span class="badge">${MONTH_FULL[month-1]} ${year}</span></div>
   <table>
     <thead>
-      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th></tr>
+      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th><th>3-Month Trend <span class="trend-badge">${trendLabel}</span></th></tr>
     </thead>
     <tbody>${mainRows}</tbody>
     <tfoot>
@@ -451,6 +505,7 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
         <td>${fmtD(mainTotal)}</td>
         <td style="text-align:center">${mainClosed}</td>
         <td style="text-align:center">${mainResale}</td>
+        <td></td>
       </tr>
     </tfoot>
   </table>
@@ -458,7 +513,7 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   <div class="section-title" style="margin-top:8px">Individual Rep Breakdown <span class="badge">Sarah &amp; Hannah</span></div>
   <table>
     <thead>
-      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th><th style="text-align:center">Capture Rate</th></tr>
+      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th><th style="text-align:center">Capture Rate</th><th>3-Month Trend <span class="trend-badge">${trendLabel}</span></th></tr>
     </thead>
     <tbody>${ownRows}</tbody>
     <tfoot>
@@ -467,6 +522,7 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
         <td>${fmtD(ownTotal)}</td>
         <td style="text-align:center">${ownClosed}</td>
         <td style="text-align:center">${ownResale}</td>
+        <td></td>
         <td></td>
       </tr>
     </tfoot>
