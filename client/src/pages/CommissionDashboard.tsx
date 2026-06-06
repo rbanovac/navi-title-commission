@@ -336,6 +336,151 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
   downloadHTML(html, `${rep.name.replace(/ /g,"_")}_Commission_${new Date().toISOString().slice(0,7)}.html`);
 }
 
+function exportSPR(month: number, year: number, entries: SavedEntry[]) {
+  const monthEntries = entries.filter(e => e.month===month && e.year===year);
+  if (!monthEntries.length) { alert(`No saved data for ${MONTH_FULL[month-1]} ${year}.`); return; }
+
+  const totalRev    = monthEntries.reduce((s,e)=>s+e.grossRevenue, 0);
+  const totalClosed = monthEntries.reduce((s,e)=>s+(e.totalClosed??0), 0);
+  const totalResale = monthEntries.reduce((s,e)=>s+e.closedResale, 0);
+
+  const SPR_OWN_SECTION = new Set(["Sarah Perkins", "Hannah Pfleiger"]);
+  const mainReps = REPS.filter(r => !SPR_OWN_SECTION.has(r.name));
+  const ownReps  = REPS.filter(r =>  SPR_OWN_SECTION.has(r.name));
+
+  const makeRow = (rep: RepConfig) => {
+    const e = monthEntries.find(e=>e.repName===rep.name);
+    const colspan = SPR_OWN_SECTION.has(rep.name) ? 5 : 4;
+    if (!e) return `<tr style="color:#9ca3af"><td colspan="${colspan}" style="text-align:left;padding:11px 14px;font-size:12px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d1d5db;margin-right:8px"></span>${rep.name} — no data</td></tr>`;
+    const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
+    const isSplit = SPLIT_REVENUE_REPS.has(rep.name);
+    const hasSplit = isSplit && ((e.escrowFees??0) + (e.titleFees??0)) > 0;
+    const revCell = hasSplit
+      ? `<td><strong>${fmtD(e.grossRevenue)}</strong><br/><span style="font-size:10px;color:#6b7280">Navi ${fmtD(e.escrowFees??0)}</span>&nbsp;&nbsp;<span style="font-size:10px;color:#6b7280">JV ${fmtD(e.titleFees??0)}</span></td>`
+      : `<td>${fmtD(e.grossRevenue)}</td>`;
+    const captureCell = rep.name === "Hannah Pfleiger"
+      ? `<td style="text-align:center">${e.captureRate != null ? e.captureRate.toFixed(1) + "%" : "—"}</td>`
+      : "";
+    return `
+      <tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px"></span><strong>${rep.name}</strong></td>
+        ${revCell}
+        <td style="text-align:center">${e.totalClosed ?? "—"}</td>
+        <td style="text-align:center">${e.closedResale > 0 ? e.closedResale : "—"}</td>
+        ${captureCell}
+      </tr>`;
+  };
+
+  const mainRows = mainReps.map(makeRow).join("");
+  const ownRows  = ownReps.map(makeRow).join("");
+
+  const mainTotal    = mainReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name); return s+(e?.grossRevenue??0); },0);
+  const mainClosed   = mainReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name); return s+(e?.totalClosed??0); },0);
+  const mainResale   = mainReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name); return s+(e?.closedResale??0); },0);
+  const ownTotal     = ownReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name);  return s+(e?.grossRevenue??0); },0);
+  const ownClosed    = ownReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name);  return s+(e?.totalClosed??0); },0);
+  const ownResale    = ownReps.reduce((s,r)=>{ const e=monthEntries.find(e=>e.repName===r.name);  return s+(e?.closedResale??0); },0);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <script>window.onload=function(){window.print();}<\/script>
+  <title>Sales Production Report — ${MONTH_FULL[month-1]} ${year}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#111827;background:#fff;padding:40px 48px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f766e;padding-bottom:20px;margin-bottom:28px}
+    .logo{font-size:22px;font-weight:800;color:#0f766e;letter-spacing:-0.5px}
+    .logo-sub{font-size:11px;color:#6b7280;font-weight:500;margin-top:2px}
+    .doc-title{text-align:right}
+    .doc-title h1{font-size:20px;font-weight:700;color:#111827}
+    .doc-title .sub{font-size:13px;color:#6b7280;margin-top:4px}
+    .kpi-row{display:flex;gap:20px;margin-bottom:32px}
+    .kpi{flex:1;background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px 20px;border-top:3px solid #0f766e}
+    .kpi-label{font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+    .kpi-value{font-size:22px;font-weight:700;color:#111827}
+    .kpi-value.accent{color:#0f766e}
+    .section-title{font-size:14px;font-weight:700;color:#111827;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .badge{background:#0f766e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.5px}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:28px}
+    th{background:#0f766e;color:#fff;padding:11px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+    td{padding:11px 14px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:#f9fafb}
+    .totals-row td{font-weight:700;background:#f0fdfa;border-top:2px solid #99f6e4;font-size:14px}
+    .footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
+    @media print{body{padding:20px 24px}}
+  </style></head><body>
+  <div class="header">
+    <div>
+      <div class="logo">Navi Title</div>
+      <div class="logo-sub">Sales Production Report</div>
+    </div>
+    <div class="doc-title">
+      <h1>${MONTH_FULL[month-1]} ${year}</h1>
+      <div class="sub">Generated ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total Team Revenue</div>
+      <div class="kpi-value accent">${fmtD(totalRev)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Closed Transactions</div>
+      <div class="kpi-value">${totalClosed}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Closed Resale</div>
+      <div class="kpi-value">${totalResale}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Active Reps</div>
+      <div class="kpi-value">${monthEntries.filter(e=>e.grossRevenue>0).length}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Team Production <span class="badge">${MONTH_FULL[month-1]} ${year}</span></div>
+  <table>
+    <thead>
+      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th></tr>
+    </thead>
+    <tbody>${mainRows}</tbody>
+    <tfoot>
+      <tr class="totals-row">
+        <td>Team Total</td>
+        <td>${fmtD(mainTotal)}</td>
+        <td style="text-align:center">${mainClosed}</td>
+        <td style="text-align:center">${mainResale}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="section-title" style="margin-top:8px">Individual Rep Breakdown <span class="badge">Sarah &amp; Hannah</span></div>
+  <table>
+    <thead>
+      <tr><th>Sales Rep</th><th>Total Revenue</th><th>Total Closed</th><th>Closed Resale</th><th style="text-align:center">Capture Rate</th></tr>
+    </thead>
+    <tbody>${ownRows}</tbody>
+    <tfoot>
+      <tr class="totals-row">
+        <td>Section Total</td>
+        <td>${fmtD(ownTotal)}</td>
+        <td style="text-align:center">${ownClosed}</td>
+        <td style="text-align:center">${ownResale}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <span>Navi Title — Confidential</span>
+    <span>Sales Production Report · ${MONTH_FULL[month-1]} ${year}</span>
+  </div>
+  </body></html>`;
+
+  downloadHTML(html, `SPR-${MONTH_FULL[month-1]}-${year}.html`);
+}
+
 function exportAccountingPDF(month: number, year: number, entries: SavedEntry[]) {
   const monthEntries = entries.filter(e => e.month===month && e.year===year);
   if (!monthEntries.length) { alert(`No saved data for ${MONTH_FULL[month-1]} ${year}.`); return; }
@@ -1037,6 +1182,36 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
               onClick={() => exportAccountingPDF(exportMonth, exportYear, savedEntries)}
               disabled={savedPeriods.length===0}>
               <Download size={13}/> Export PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="export-divider"/>
+
+        <div className="export-section">
+          <div className="export-section-header">
+            <FileText size={15}/>
+            <span>Sales Production Report (SPR)</span>
+          </div>
+          <p className="export-desc">Full team production for a selected month — excludes commissions. Sarah &amp; Hannah shown in their own section.</p>
+          <div className="export-row">
+            <select className="modal-select export-sel" value={`${exportYear}-${String(exportMonth).padStart(2,"0")}`}
+              onChange={e => {
+                const [y,m] = e.target.value.split("-");
+                setExportYear(parseInt(y)); setExportMonth(parseInt(m));
+              }}>
+              {savedPeriods.length > 0
+                ? savedPeriods.map(p => {
+                    const [y,m] = p.split("-");
+                    return <option key={p} value={p}>{MONTH_FULL[parseInt(m)-1]} {y}</option>;
+                  })
+                : <option value="">No saved months</option>
+              }
+            </select>
+            <button className="export-btn export-btn-acct"
+              onClick={() => exportSPR(exportMonth, exportYear, savedEntries)}
+              disabled={savedPeriods.length===0}>
+              <Download size={13}/> Export SPR
             </button>
           </div>
         </div>
