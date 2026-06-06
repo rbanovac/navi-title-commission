@@ -3,8 +3,15 @@ import type { User, InsertUser, MonthlyData, InsertMonthlyData } from '@shared/s
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { eq, and } from "drizzle-orm";
+import path from "path";
 
-const sqlite = new Database("data.db");
+// Production (Railway): use the persistent volume mounted at /data so the DB
+// survives redeploys. Development: keep it in the project root.
+const DB_PATH = process.env.NODE_ENV === "production"
+  ? "/data/commission.db"
+  : path.resolve(process.cwd(), "data.db");
+
+const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 
 export const db = drizzle(sqlite);
