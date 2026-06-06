@@ -729,8 +729,12 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
             ? v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
             : v.toLocaleString("en-US",{maximumFractionDigits:0});
         };
-        escrow[rep.name] = fmtField(e?.escrowFees);
-        title[rep.name]  = fmtField(e?.titleFees);
+        // If escrow+title were stored, use them. If this is an older entry where
+        // only grossRevenue was saved (escrow/title both 0), load the full amount
+        // into escrowFees so the split display still shows the correct total.
+        const hasStoredSplit = e && ((e.escrowFees ?? 0) + (e.titleFees ?? 0)) > 0;
+        escrow[rep.name] = hasStoredSplit ? fmtField(e!.escrowFees) : fmtField(e?.grossRevenue);
+        title[rep.name]  = hasStoredSplit ? fmtField(e!.titleFees)  : "";
       }
     });
     const cr: Record<string,string> = {};
