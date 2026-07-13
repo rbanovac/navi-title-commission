@@ -1483,6 +1483,14 @@ export default function CommissionDashboard() {
 
   const handlePrint = async () => {
     if (!printModal) return;
+    // Open the window SYNCHRONOUSLY inside the user-gesture handler — before any await.
+    // Popup blockers only allow window.open() when called synchronously in a click handler.
+    const newWin = window.open("", "_blank", "noopener");
+    if (!newWin) {
+      alert("Popup blocked. Please allow popups for this site and try again.");
+      return;
+    }
+    newWin.document.write("<html><body style='font-family:sans-serif;padding:2rem'><p>Loading report...</p></body></html>");
     setReportUrl("loading");
     try {
       const res = await fetch(`${API_BASE}/api/report`, {
@@ -1491,10 +1499,13 @@ export default function CommissionDashboard() {
         body: JSON.stringify({ html: printModal.html }),
       });
       const { id } = await res.json();
-      setReportUrl(`${API_BASE}/api/report/${id}`);
+      const url = `${API_BASE}/api/report/${id}`;
+      // Navigate the already-open window to the real URL
+      newWin.location.href = url;
+      setReportUrl(url);
     } catch {
+      newWin.document.write("<html><body style='font-family:sans-serif;padding:2rem'><p>Error generating report. Please close this tab and try again.</p></body></html>");
       setReportUrl(null);
-      alert("Could not generate report link. Please try again.");
     }
   };
 
@@ -1654,25 +1665,13 @@ export default function CommissionDashboard() {
               <div className="print-modal-bar">
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
-                  {reportUrl && reportUrl !== "loading" ? (
-                    <a
-                      className="print-modal-btn print-modal-print"
-                      href={reportUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e=>e.stopPropagation()}
-                    >
-                      <Download size={14}/> Tap to Open &amp; Print
-                    </a>
-                  ) : (
-                    <button
-                      className="print-modal-btn print-modal-print"
-                      onClick={e=>{e.stopPropagation();handlePrint();}}
-                      disabled={reportUrl==="loading"}
-                    >
-                      {reportUrl==="loading" ? "Generating link..." : <><Download size={14}/> Get Print Link</>}
-                    </button>
-                  )}
+                  <button
+                    className="print-modal-btn print-modal-print"
+                    onClick={e=>{e.stopPropagation();handlePrint();}}
+                    disabled={reportUrl==="loading"}
+                  >
+                    {reportUrl==="loading" ? "Opening..." : <><Download size={14}/> Open to Print</>}
+                  </button>
                   <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);setReportUrl(null);}}>
                     ✕ Close
                   </button>
