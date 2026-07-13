@@ -162,24 +162,25 @@ interface SavedEntry {
 // ─── Print / Export Helpers ────────────────────────────────────────────────────
 
 function downloadHTML(html: string, _filename: string) {
-  // Open in a new tab — works reliably inside sandboxed iframes.
-  // The page auto-triggers window.print() so the user can Save as PDF.
-  const win = window.open("", "_blank");
-  if (win) {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  } else {
-    // Popup blocked fallback: encode as data URI
-    const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(html);
-    const a = document.createElement("a");
-    a.href = encoded;
-    a.target = "_blank";
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Inject into a print-only overlay and call window.print().
+  // This works inside sandboxed iframes where window.open + Blob downloads are blocked.
+  const OVERLAY_ID = "__print_overlay__";
+  let overlay = document.getElementById(OVERLAY_ID);
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = OVERLAY_ID;
+    document.body.appendChild(overlay);
   }
+  // Strip the outer <html>/<head>/<body> tags — inject just the inner content
+  // but keep the <style> blocks by extracting them
+  const styleMatch = html.match(/<style>([\/\s\S]*?)<\/style>/i);
+  const bodyMatch  = html.match(/<body>([\/\s\S]*?)<\/body>/i);
+  const styles = styleMatch ? styleMatch[1] : "";
+  const body   = bodyMatch  ? bodyMatch[1]  : html;
+  overlay.innerHTML = `<style>${styles}</style>${body}`;
+  window.print();
+  // Clear after print dialog closes
+  setTimeout(() => { overlay!.innerHTML = ""; }, 1000);
 }
 
 function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEntry[]) {
@@ -234,7 +235,6 @@ function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEn
   }).join("");
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <script>window.onload=function(){window.print();}<\/script>
   <title>Commission Report — ${rep.name}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -444,7 +444,6 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   const trendLabel = trendMonths.map(({y,m}) => `${MONTH_NAMES[m-1]} ${y}`).join(" → ");
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <script>window.onload=function(){window.print();}<\/script>
   <title>Sales Production Report — ${MONTH_FULL[month-1]} ${year}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -574,7 +573,6 @@ function exportAccountingPDF(month: number, year: number, entries: SavedEntry[])
   }).join("");
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <script>window.onload=function(){window.print();}<\/script>
   <title>Commission Payroll — ${MONTH_FULL[month-1]} ${year}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}

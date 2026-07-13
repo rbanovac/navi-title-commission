@@ -1245,3 +1245,17 @@ button { cursor: pointer; background: none; border: none; }
   .export-panel { flex-direction: column; }
   .export-divider { width: 100%; height: 1px; }
 }
+
+/* ── Print: hide dashboard, show only export overlay ── */
+@media print {
+  body > *:not(#__print_overlay__) { display: none !important; }
+  #__print_overlay__ {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    z-index: 99999;
+    padding: 0;
+    margin: 0;
+  }
+}
