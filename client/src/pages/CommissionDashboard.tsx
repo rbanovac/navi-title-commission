@@ -1483,14 +1483,24 @@ export default function CommissionDashboard() {
 
   const handlePrint = async () => {
     if (!printModal) return;
-    // Open the window SYNCHRONOUSLY inside the user-gesture handler — before any await.
-    // Popup blockers only allow window.open() when called synchronously in a click handler.
-    const newWin = window.open("", "_blank", "noopener");
-    if (!newWin) {
-      alert("Popup blocked. Please allow popups for this site and try again.");
+
+    // If running natively (Railway URL, not inside Perplexity iframe), use window.print() directly.
+    const isTopLevel = window === window.top;
+    if (isTopLevel) {
+      const PRINT_STYLE_ID = "__navi_print_style__";
+      let style = document.getElementById(PRINT_STYLE_ID) as HTMLStyleElement | null;
+      if (!style) {
+        style = document.createElement("style");
+        style.id = PRINT_STYLE_ID;
+        document.head.appendChild(style);
+      }
+      style.textContent = `@media print { body > *:not(#__navi_report__) { display:none!important; } #__navi_report__ { display:block!important; position:fixed; inset:0; background:#fff; z-index:99999; overflow:visible; } }`;
+      window.print();
+      setTimeout(() => { style!.textContent = ""; }, 1500);
       return;
     }
-    newWin.document.write("<html><body style='font-family:sans-serif;padding:2rem'><p>Loading report...</p></body></html>");
+
+    // Inside Perplexity iframe: try to open a new tab via the Railway report endpoint.
     setReportUrl("loading");
     try {
       const res = await fetch(`${API_BASE}/api/report`, {
@@ -1500,12 +1510,12 @@ export default function CommissionDashboard() {
       });
       const { id } = await res.json();
       const url = `${API_BASE}/api/report/${id}`;
-      // Navigate the already-open window to the real URL
-      newWin.location.href = url;
       setReportUrl(url);
+      // Show the URL so the user can copy/open it manually
+      prompt("Copy this link and open it in your browser to print:", url);
     } catch {
-      newWin.document.write("<html><body style='font-family:sans-serif;padding:2rem'><p>Error generating report. Please close this tab and try again.</p></body></html>");
       setReportUrl(null);
+      alert("Could not generate report link. Please open the dashboard directly at: commission-api-production-0d7c.up.railway.app");
     }
   };
 
