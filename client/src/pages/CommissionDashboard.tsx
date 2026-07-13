@@ -1652,10 +1652,10 @@ export default function CommissionDashboard() {
               <div className="print-modal-bar">
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
-                  <button className="print-modal-btn print-modal-print" onClick={handlePrint}>
+                  <button className="print-modal-btn print-modal-print" onClick={e=>{e.stopPropagation();handlePrint();}}>
                     <Download size={14}/> Open to Print
                   </button>
-                  <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
+                  <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);}}>
                     ✕ Close
                   </button>
                 </div>

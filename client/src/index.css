@@ -1292,13 +1292,17 @@ button { cursor: pointer; background: none; border: none; }
 .print-modal-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 7px 14px;
+  padding: 10px 16px;
+  min-height: 44px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   border: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .print-modal-print { background: #fff; color: #1e3a8a; }
 .print-modal-print:hover { background: #dbeafe; }
