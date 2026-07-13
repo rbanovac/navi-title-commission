@@ -104,8 +104,9 @@ function getResaleDed(repName: string) { return RESALE_DEDUCTION[repName] ?? 250
 // Reps with custom commission structures (bypasses standard calcCommission)
 function calcHannahCommission(gross: number): { commission: number; t2: number; t4: number; t2amt: number; t4amt: number } {
   if (gross <= 0) return { commission: 0, t2: 0, t4: 0, t2amt: 0, t4amt: 0 };
-  const t2 = Math.min(gross, 200000);
-  const t4 = Math.max(0, gross - 200000);
+  // Nothing below $150k. 2% on $150k–$200k. 4% above $200k.
+  const t2 = Math.max(0, Math.min(gross, 200000) - 150000); // portion between 150k-200k
+  const t4 = Math.max(0, gross - 200000);                   // portion above 200k
   return { commission: t2*0.02 + t4*0.04, t2, t4, t2amt: t2*0.02, t4amt: t4*0.04 };
 }
 const CUSTOM_COMM_REPS = new Set(["Hannah Pfleiger"]);
@@ -696,7 +697,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
 
   let baseLabel: string;
   let baseColor: string;
-  if (isHannah)            { baseLabel = "2% / 4% Tiers";                          baseColor = "color-amber"; }
+  if (isHannah)            { baseLabel = "2% $150k–$200k / 4% $200k+";              baseColor = "color-amber"; }
   else if (guarantee > 0)  { baseLabel = `$${guarantee.toLocaleString()} Draw`;    baseColor = "color-blue"; }
   else if (commBase === 0) { baseLabel = "No Base";                                baseColor = "color-amber"; }
   else                     { baseLabel = `$${commBase.toLocaleString()} Base`;     baseColor = "color-green"; }
@@ -848,7 +849,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
               {isHannah ? (
                 <>
                   <div className="breakdown-row highlight"><span className="breakdown-label">Commissionable Revenue (no deductions)</span><span className="breakdown-value">{fmt(gross)}</span></div>
-                  {hannah!.t2 > 0 && <div className="breakdown-row"><span className="breakdown-label">2% tier — up to $200k ({fmt(hannah!.t2)})</span><span className="breakdown-value">{fmt(hannah!.t2amt)}</span></div>}
+                  {hannah!.t2 > 0 && <div className="breakdown-row"><span className="breakdown-label">2% tier — $150k–$200k ({fmt(hannah!.t2)})</span><span className="breakdown-value">{fmt(hannah!.t2amt)}</span></div>}
                   {hannah!.t4 > 0 && <div className="breakdown-row"><span className="breakdown-label">4% tier — above $200k ({fmt(hannah!.t4)})</span><span className="breakdown-value">{fmt(hannah!.t4amt)}</span></div>}
                 </>
               ) : (
