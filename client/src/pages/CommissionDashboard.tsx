@@ -161,26 +161,13 @@ interface SavedEntry {
 
 // ─── Print / Export Helpers ────────────────────────────────────────────────────
 
-function downloadHTML(html: string, _filename: string) {
-  // Inject into a print-only overlay and call window.print().
-  // This works inside sandboxed iframes where window.open + Blob downloads are blocked.
-  const OVERLAY_ID = "__print_overlay__";
-  let overlay = document.getElementById(OVERLAY_ID);
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = OVERLAY_ID;
-    document.body.appendChild(overlay);
+// Global print modal callback — set by CommissionDashboard, called by export functions
+let _showPrintModal: ((html: string, title: string) => void) | null = null;
+
+function downloadHTML(html: string, title: string) {
+  if (_showPrintModal) {
+    _showPrintModal(html, title);
   }
-  // Strip the outer <html>/<head>/<body> tags — inject just the inner content
-  // but keep the <style> blocks by extracting them
-  const styleMatch = html.match(/<style>([\/\s\S]*?)<\/style>/i);
-  const bodyMatch  = html.match(/<body>([\/\s\S]*?)<\/body>/i);
-  const styles = styleMatch ? styleMatch[1] : "";
-  const body   = bodyMatch  ? bodyMatch[1]  : html;
-  overlay.innerHTML = `<style>${styles}</style>${body}`;
-  window.print();
-  // Clear after print dialog closes
-  setTimeout(() => { overlay!.innerHTML = ""; }, 1000);
 }
 
 function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEntry[]) {
@@ -1485,6 +1472,13 @@ export default function CommissionDashboard() {
   const [savedEntries, setSavedEntries] = useState<SavedEntry[]>(buildSeedEntries());
   const [apiStatus, setApiStatus]       = useState<"loading"|"connected"|"offline">("loading");
   const seededRef = useRef(false);
+  const [printModal, setPrintModal] = useState<{html:string;title:string}|null>(null);
+
+  // Wire up the global export callback
+  useEffect(() => {
+    _showPrintModal = (html, title) => setPrintModal({html, title});
+    return () => { _showPrintModal = null; };
+  }, []);
 
   // Load from Railway backend on mount
   useEffect(() => {
@@ -1627,6 +1621,31 @@ export default function CommissionDashboard() {
         <main className="rep-grid-wrapper">
           <ChartsTab savedEntries={savedEntries} onDelete={handleDelete} darkMode={darkMode}/>
         </main>
+      )}
+
+      {/* ── Print Preview Modal ── */}
+      {printModal && (
+        <div className="print-modal-backdrop" onClick={()=>setPrintModal(null)}>
+          <div className="print-modal" onClick={e=>e.stopPropagation()}>
+            <div className="print-modal-bar">
+              <span className="print-modal-title">{printModal.title}</span>
+              <div className="print-modal-actions">
+                <button className="print-modal-btn print-modal-print" onClick={()=>window.print()}>
+                  <Download size={14}/> Print / Save PDF
+                </button>
+                <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+            <iframe
+              className="print-modal-frame"
+              srcDoc={printModal.html}
+              title={printModal.title}
+              sandbox="allow-same-origin allow-scripts"
+            />
+          </div>
+        </div>
       )}
 
       {/* Mobile bottom tab bar — visible on screens ≤768px */}
