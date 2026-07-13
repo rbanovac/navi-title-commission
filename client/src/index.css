@@ -1304,8 +1304,9 @@ button { cursor: pointer; background: none; border: none; }
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.print-modal-print { background: #fff; color: #1e3a8a; }
+.print-modal-print { background: #fff; color: #1e3a8a; text-decoration: none; }
 .print-modal-print:hover { background: #dbeafe; }
+.print-modal-print:visited { color: #1e3a8a; }
 .print-modal-close { background: rgba(255,255,255,0.15); color: #fff; }
 .print-modal-close:hover { background: rgba(255,255,255,0.25); }
 .print-modal-body {

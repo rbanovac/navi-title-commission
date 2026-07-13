@@ -1473,6 +1473,7 @@ export default function CommissionDashboard() {
   const [apiStatus, setApiStatus]       = useState<"loading"|"connected"|"offline">("loading");
   const seededRef = useRef(false);
   const [printModal, setPrintModal] = useState<{html:string;title:string}|null>(null);
+  const [reportUrl,   setReportUrl]   = useState<string|null>(null);
 
   // Wire up the global export callback
   useEffect(() => {
@@ -1482,20 +1483,18 @@ export default function CommissionDashboard() {
 
   const handlePrint = async () => {
     if (!printModal) return;
+    setReportUrl("loading");
     try {
-      // POST the HTML to Railway — get back a real HTTPS URL with no sandbox restrictions
       const res = await fetch(`${API_BASE}/api/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html: printModal.html }),
       });
       const { id } = await res.json();
-      const url = `${API_BASE}/api/report/${id}`;
-      // Open the real HTTPS URL — works on mobile Safari/Chrome outside sandbox
-      window.open(url, "_blank", "noopener,noreferrer");
+      setReportUrl(`${API_BASE}/api/report/${id}`);
     } catch {
-      // Fallback: copy URL to clipboard or show it
-      alert("Could not open report. Please try again.");
+      setReportUrl(null);
+      alert("Could not generate report link. Please try again.");
     }
   };
 
@@ -1655,10 +1654,26 @@ export default function CommissionDashboard() {
               <div className="print-modal-bar">
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
-                  <button className="print-modal-btn print-modal-print" onClick={e=>{e.stopPropagation();handlePrint();}}>
-                    <Download size={14}/> Open to Print
-                  </button>
-                  <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);}}>
+                  {reportUrl && reportUrl !== "loading" ? (
+                    <a
+                      className="print-modal-btn print-modal-print"
+                      href={reportUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e=>e.stopPropagation()}
+                    >
+                      <Download size={14}/> Tap to Open &amp; Print
+                    </a>
+                  ) : (
+                    <button
+                      className="print-modal-btn print-modal-print"
+                      onClick={e=>{e.stopPropagation();handlePrint();}}
+                      disabled={reportUrl==="loading"}
+                    >
+                      {reportUrl==="loading" ? "Generating link..." : <><Download size={14}/> Get Print Link</>}
+                    </button>
+                  )}
+                  <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);setReportUrl(null);}}>
                     ✕ Close
                   </button>
                 </div>
