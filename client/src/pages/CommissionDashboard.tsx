@@ -1101,9 +1101,13 @@ interface ChartsTabProps {
 
 function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
   const [selRep,      setSelRep]      = useState("All");
-  const [exportRep,   setExportRep]   = useState("");
-  const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
-  const [exportYear,  setExportYear]  = useState(2026);
+  const [exportRep,     setExportRep]     = useState("");
+  const [exportMonth,   setExportMonth]   = useState(new Date().getMonth() + 1);
+  const [exportYear,    setExportYear]    = useState(2026);
+  const [sprMonth,      setSprMonth]      = useState(new Date().getMonth() + 1);
+  const [sprYear,       setSprYear]       = useState(2026);
+  const [acctMonth,     setAcctMonth]     = useState(new Date().getMonth() + 1);
+  const [acctYear,      setAcctYear]      = useState(2026);
 
   const axisColor = darkMode?"#8b949e":"#6b7280";
   const gridColor = darkMode?"#21262d":"#e8eaef";
@@ -1165,6 +1169,16 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
   const savedPeriods = Array.from(
     new Set(savedEntries.map(e=>`${e.year}-${String(e.month).padStart(2,"0")}`))
   ).sort().reverse();
+
+  // Auto-select most recent saved period for all export selectors
+  useEffect(() => {
+    if (savedPeriods.length > 0) {
+      const [y, m] = savedPeriods[0].split("-").map(Number);
+      setExportMonth(m); setExportYear(y);
+      setSprMonth(m);    setSprYear(y);
+      setAcctMonth(m);   setAcctYear(y);
+    }
+  }, [savedPeriods.join(",")]);
 
   return (
     <div className="charts-tab">
@@ -1230,10 +1244,10 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
           </div>
           <p className="export-desc">All reps for a selected month — shows commissions owed for payroll processing.</p>
           <div className="export-row">
-            <select className="modal-select export-sel" value={`${exportYear}-${String(exportMonth).padStart(2,"0")}`}
+            <select className="modal-select export-sel" value={`${acctYear}-${String(acctMonth).padStart(2,"0")}`}
               onChange={e => {
                 const [y,m] = e.target.value.split("-");
-                setExportYear(parseInt(y)); setExportMonth(parseInt(m));
+                setAcctYear(parseInt(y)); setAcctMonth(parseInt(m));
               }}>
               {savedPeriods.length > 0
                 ? savedPeriods.map(p => {
@@ -1244,7 +1258,7 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
               }
             </select>
             <button className="export-btn export-btn-acct"
-              onClick={() => exportAccountingPDF(exportMonth, exportYear, savedEntries)}
+              onClick={() => exportAccountingPDF(acctMonth, acctYear, savedEntries)}
               disabled={savedPeriods.length===0}>
               <Download size={13}/> Export PDF
             </button>
@@ -1260,10 +1274,10 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
           </div>
           <p className="export-desc">Full team production for a selected month — excludes commissions. Sarah &amp; Hannah shown in their own section.</p>
           <div className="export-row">
-            <select className="modal-select export-sel" value={`${exportYear}-${String(exportMonth).padStart(2,"0")}`}
+            <select className="modal-select export-sel" value={`${sprYear}-${String(sprMonth).padStart(2,"0")}`}
               onChange={e => {
                 const [y,m] = e.target.value.split("-");
-                setExportYear(parseInt(y)); setExportMonth(parseInt(m));
+                setSprYear(parseInt(y)); setSprMonth(parseInt(m));
               }}>
               {savedPeriods.length > 0
                 ? savedPeriods.map(p => {
@@ -1274,7 +1288,7 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
               }
             </select>
             <button className="export-btn export-btn-acct"
-              onClick={() => exportSPR(exportMonth, exportYear, savedEntries)}
+              onClick={() => exportSPR(sprMonth, sprYear, savedEntries)}
               disabled={savedPeriods.length===0}>
               <Download size={13}/> Export SPR
             </button>
