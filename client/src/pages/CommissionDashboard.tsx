@@ -1103,6 +1103,7 @@ interface ChartsTabProps {
 
 function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
   const [selRep,      setSelRep]      = useState("All");
+  const [exportRep,   setExportRep]   = useState("");
   const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
   const [exportYear,  setExportYear]  = useState(2026);
 
@@ -1202,22 +1203,22 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
             <FileText size={15}/>
             <span>Rep Statement</span>
           </div>
-          <p className="export-desc">Full monthly history + revenue chart for one rep — send directly to them. Select a rep to enable export.</p>
+          <p className="export-desc">Full monthly history + revenue chart for one rep — send directly to them.</p>
           <div className="export-row">
-            <select className="modal-select export-sel" value={selRep==="All" ? "" : selRep}
-              onChange={e => setSelRep(e.target.value || "All")}>
+            <select className="modal-select export-sel" value={exportRep}
+              onChange={e => setExportRep(e.target.value)}>
               <option value="">— Select Rep —</option>
               {REPS.map(r=><option key={r.name} value={r.name}>{r.name}</option>)}
             </select>
             <button className="export-btn export-btn-rep"
               onClick={() => {
-                const rep = REPS.find(r=>r.name===selRep);
-                if (!rep) { alert("Please select a rep from the dropdown first."); return; }
+                const rep = REPS.find(r=>r.name===exportRep);
+                if (!rep) { alert("Please select a rep first."); return; }
                 exportRepPDF(rep, savedEntries, savedEntries);
               }}
-              disabled={!selRep || selRep==="All" || savedPeriods.length===0}
-              title={!selRep || selRep==="All" ? "Select a rep to export" : "Export rep statement"}>
-              <Download size={13}/> {(!selRep || selRep==="All") ? "Select a Rep" : `Export ${selRep.split(" ")[0]}`}
+              disabled={!exportRep}
+              title={!exportRep ? "Select a rep to export" : `Export ${exportRep}`}>
+              <Download size={13}/> {!exportRep ? "Select a Rep" : `Export ${exportRep.split(" ")[0]}`}
             </button>
           </div>
         </div>
