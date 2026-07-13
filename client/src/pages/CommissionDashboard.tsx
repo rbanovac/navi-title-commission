@@ -1481,18 +1481,19 @@ export default function CommissionDashboard() {
   }, []);
 
   const handlePrint = () => {
-    // Inject a temporary <style> that hides everything except the report div,
-    // call window.print(), then remove it. Works in sandboxed iframes.
-    const PRINT_STYLE_ID = "__navi_print_style__";
-    let style = document.getElementById(PRINT_STYLE_ID) as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement("style");
-      style.id = PRINT_STYLE_ID;
-      document.head.appendChild(style);
-    }
-    style.textContent = `@media print { body > *:not(#__navi_report__) { display:none!important; } #__navi_report__ { display:block!important; position:fixed; inset:0; background:#fff; z-index:99999; overflow:visible; } }`;
-    window.print();
-    setTimeout(() => { style!.textContent = ""; }, 1000);
+    if (!printModal) return;
+    // Encode the full HTML as a data URI and open it.
+    // On mobile Safari/Chrome this opens a real browser tab where print works.
+    // On desktop it opens a new tab with the report ready to print.
+    const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(printModal.html);
+    const a = document.createElement("a");
+    a.href = encoded;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    // Try click — works in most browsers
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   // Load from Railway backend on mount
@@ -1652,7 +1653,7 @@ export default function CommissionDashboard() {
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
                   <button className="print-modal-btn print-modal-print" onClick={handlePrint}>
-                    <Download size={14}/> Print / Save PDF
+                    <Download size={14}/> Open to Print
                   </button>
                   <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
                     ✕ Close
