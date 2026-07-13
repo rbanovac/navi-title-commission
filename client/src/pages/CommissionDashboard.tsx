@@ -1480,20 +1480,23 @@ export default function CommissionDashboard() {
     return () => { _showPrintModal = null; };
   }, []);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!printModal) return;
-    // Encode the full HTML as a data URI and open it.
-    // On mobile Safari/Chrome this opens a real browser tab where print works.
-    // On desktop it opens a new tab with the report ready to print.
-    const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(printModal.html);
-    const a = document.createElement("a");
-    a.href = encoded;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    // Try click — works in most browsers
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      // POST the HTML to Railway — get back a real HTTPS URL with no sandbox restrictions
+      const res = await fetch(`${API_BASE}/api/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: printModal.html }),
+      });
+      const { id } = await res.json();
+      const url = `${API_BASE}/api/report/${id}`;
+      // Open the real HTTPS URL — works on mobile Safari/Chrome outside sandbox
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Fallback: copy URL to clipboard or show it
+      alert("Could not open report. Please try again.");
+    }
   };
 
   // Load from Railway backend on mount
