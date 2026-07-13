@@ -1304,36 +1304,16 @@ button { cursor: pointer; background: none; border: none; }
 .print-modal-print:hover { background: #dbeafe; }
 .print-modal-close { background: rgba(255,255,255,0.15); color: #fff; }
 .print-modal-close:hover { background: rgba(255,255,255,0.25); }
-.print-modal-frame {
+.print-modal-body {
   flex: 1;
   width: 100%;
-  border: none;
-  min-height: 0;
-  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+  background: #fff;
 }
 @media (max-width: 639px) {
-  .print-modal-frame { min-height: calc(100vh - 56px); }
+  .print-modal-body { min-height: calc(100vh - 56px); }
 }
 
-/* ── Print: only show the modal iframe content ── */
-@media print {
-  body > * { display: none !important; }
-  .print-modal-backdrop,
-  .print-modal,
-  .print-modal-frame { display: block !important; }
-  .print-modal-backdrop {
-    position: fixed !important;
-    inset: 0 !important;
-    background: #fff !important;
-    z-index: 99999 !important;
-    padding: 0 !important;
-  }
-  .print-modal { max-height: none !important; border-radius: 0 !important; }
-  .print-modal-bar { display: none !important; }
-  .print-modal-frame {
-    width: 100% !important;
-    height: 100vh !important;
-  }
-  /* Hide old overlay if still present */
-  #__print_overlay__ { display: none !important; }
-}
+/* ── Print handled via JS-injected style in handlePrint() ── */

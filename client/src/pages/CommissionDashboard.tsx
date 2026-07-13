@@ -1473,7 +1473,6 @@ export default function CommissionDashboard() {
   const [apiStatus, setApiStatus]       = useState<"loading"|"connected"|"offline">("loading");
   const seededRef = useRef(false);
   const [printModal, setPrintModal] = useState<{html:string;title:string}|null>(null);
-  const printFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Wire up the global export callback
   useEffect(() => {
@@ -1482,22 +1481,18 @@ export default function CommissionDashboard() {
   }, []);
 
   const handlePrint = () => {
-    const frame = printFrameRef.current;
-    if (frame && frame.contentWindow) {
-      try {
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      } catch(e) {
-        // Fallback: open in new tab
-        const win = window.open("", "_blank");
-        if (win && printModal) {
-          win.document.write(printModal.html);
-          win.document.close();
-          win.focus();
-          setTimeout(() => win.print(), 500);
-        }
-      }
+    // Inject a temporary <style> that hides everything except the report div,
+    // call window.print(), then remove it. Works in sandboxed iframes.
+    const PRINT_STYLE_ID = "__navi_print_style__";
+    let style = document.getElementById(PRINT_STYLE_ID) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = PRINT_STYLE_ID;
+      document.head.appendChild(style);
     }
+    style.textContent = `@media print { body > *:not(#__navi_report__) { display:none!important; } #__navi_report__ { display:block!important; position:fixed; inset:0; background:#fff; z-index:99999; overflow:visible; } }`;
+    window.print();
+    setTimeout(() => { style!.textContent = ""; }, 1000);
   };
 
   // Load from Railway backend on mount
@@ -1644,30 +1639,36 @@ export default function CommissionDashboard() {
       )}
 
       {/* ── Print Preview Modal ── */}
-      {printModal && (
-        <div className="print-modal-backdrop" onClick={()=>setPrintModal(null)}>
-          <div className="print-modal" onClick={e=>e.stopPropagation()}>
-            <div className="print-modal-bar">
-              <span className="print-modal-title">{printModal.title}</span>
-              <div className="print-modal-actions">
-                <button className="print-modal-btn print-modal-print" onClick={handlePrint}>
-                  <Download size={14}/> Print / Save PDF
-                </button>
-                <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
-                  ✕ Close
-                </button>
+      {printModal && (() => {
+        // Extract <style> and <body> content from the report HTML
+        const styleMatch = printModal.html.match(/<style>([\/\s\S]*?)<\/style>/i);
+        const bodyMatch  = printModal.html.match(/<body>([\/\s\S]*?)<\/body>/i);
+        const reportStyles = styleMatch ? styleMatch[1] : "";
+        const reportBody   = bodyMatch  ? bodyMatch[1]  : printModal.html;
+        return (
+          <div className="print-modal-backdrop" onClick={()=>setPrintModal(null)}>
+            <div className="print-modal" onClick={e=>e.stopPropagation()}>
+              <div className="print-modal-bar">
+                <span className="print-modal-title">{printModal.title}</span>
+                <div className="print-modal-actions">
+                  <button className="print-modal-btn print-modal-print" onClick={handlePrint}>
+                    <Download size={14}/> Print / Save PDF
+                  </button>
+                  <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
+                    ✕ Close
+                  </button>
+                </div>
               </div>
+              {/* Render report directly in DOM — avoids srcdoc iframe cross-origin block */}
+              <div
+                id="__navi_report__"
+                className="print-modal-body"
+                dangerouslySetInnerHTML={{__html: `<style>${reportStyles}</style>${reportBody}`}}
+              />
             </div>
-            <iframe
-              ref={printFrameRef}
-              className="print-modal-frame"
-              srcDoc={printModal.html}
-              title={printModal.title}
-              sandbox="allow-same-origin allow-scripts allow-modals"
-            />
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Mobile bottom tab bar — visible on screens ≤768px */}
       <nav className="mobile-tab-bar">
