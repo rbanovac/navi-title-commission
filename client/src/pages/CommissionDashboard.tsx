@@ -1482,23 +1482,20 @@ export default function CommissionDashboard() {
     return () => { _showPrintModal = null; };
   }, []);
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
     if (!printModal) return;
-    setReportUrl("loading");
-    try {
-      // Upload the report HTML to Railway to get a real HTTPS URL
-      const res = await fetch(`${API_BASE}/api/report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: printModal.html }),
-      });
-      const { id } = await res.json();
-      const url = `${API_BASE}/api/report/${id}`;
-      setReportUrl(url);
-    } catch {
-      setReportUrl(null);
-      alert("Could not generate report link. Please try again.");
-    }
+    // Use Blob + object URL — triggers native download/share sheet on mobile.
+    // The sandbox allows downloads (allow-downloads is set), so this works
+    // even when window.open and target=_blank are blocked.
+    const blob = new Blob([printModal.html], { type: "text/html" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `${printModal.title.replace(/[^a-z0-9]/gi, "-")}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   // Load from Railway backend on mount
@@ -1657,26 +1654,12 @@ export default function CommissionDashboard() {
               <div className="print-modal-bar">
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
-                  {reportUrl && reportUrl !== "loading" ? (
-                    <a
-                      className="print-modal-btn print-modal-print"
-                      href={reportUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e=>e.stopPropagation()}
-                      style={{textDecoration:"none"}}
-                    >
-                      <Download size={14}/> Open Report ↗
-                    </a>
-                  ) : (
-                    <button
-                      className="print-modal-btn print-modal-print"
-                      onClick={e=>{e.stopPropagation();handlePrint();}}
-                      disabled={reportUrl==="loading"}
-                    >
-                      {reportUrl==="loading" ? "Generating..." : <><Download size={14}/> Get Print Link</>}
-                    </button>
-                  )}
+                  <button
+                    className="print-modal-btn print-modal-print"
+                    onClick={e=>{e.stopPropagation();handlePrint();}}
+                  >
+                    <Download size={14}/> Download to Print
+                  </button>
                   <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);setReportUrl(null);}}>
                     ✕ Close
                   </button>
