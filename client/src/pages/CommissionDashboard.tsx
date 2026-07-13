@@ -1483,26 +1483,9 @@ export default function CommissionDashboard() {
 
   const handlePrint = async () => {
     if (!printModal) return;
-
-    // If running natively (Railway URL, not inside Perplexity iframe), use window.print() directly.
-    const isTopLevel = window === window.top;
-    if (isTopLevel) {
-      const PRINT_STYLE_ID = "__navi_print_style__";
-      let style = document.getElementById(PRINT_STYLE_ID) as HTMLStyleElement | null;
-      if (!style) {
-        style = document.createElement("style");
-        style.id = PRINT_STYLE_ID;
-        document.head.appendChild(style);
-      }
-      style.textContent = `@media print { body > *:not(#__navi_report__) { display:none!important; } #__navi_report__ { display:block!important; position:fixed; inset:0; background:#fff; z-index:99999; overflow:visible; } }`;
-      window.print();
-      setTimeout(() => { style!.textContent = ""; }, 1500);
-      return;
-    }
-
-    // Inside Perplexity iframe: try to open a new tab via the Railway report endpoint.
     setReportUrl("loading");
     try {
+      // Upload the report HTML to Railway to get a real HTTPS URL
       const res = await fetch(`${API_BASE}/api/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1511,11 +1494,9 @@ export default function CommissionDashboard() {
       const { id } = await res.json();
       const url = `${API_BASE}/api/report/${id}`;
       setReportUrl(url);
-      // Show the URL so the user can copy/open it manually
-      prompt("Copy this link and open it in your browser to print:", url);
     } catch {
       setReportUrl(null);
-      alert("Could not generate report link. Please open the dashboard directly at: commission-api-production-0d7c.up.railway.app");
+      alert("Could not generate report link. Please try again.");
     }
   };
 
@@ -1675,13 +1656,26 @@ export default function CommissionDashboard() {
               <div className="print-modal-bar">
                 <span className="print-modal-title">{printModal.title}</span>
                 <div className="print-modal-actions">
-                  <button
-                    className="print-modal-btn print-modal-print"
-                    onClick={e=>{e.stopPropagation();handlePrint();}}
-                    disabled={reportUrl==="loading"}
-                  >
-                    {reportUrl==="loading" ? "Opening..." : <><Download size={14}/> Open to Print</>}
-                  </button>
+                  {reportUrl && reportUrl !== "loading" ? (
+                    <a
+                      className="print-modal-btn print-modal-print"
+                      href={reportUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e=>e.stopPropagation()}
+                      style={{textDecoration:"none"}}
+                    >
+                      <Download size={14}/> Open Report ↗
+                    </a>
+                  ) : (
+                    <button
+                      className="print-modal-btn print-modal-print"
+                      onClick={e=>{e.stopPropagation();handlePrint();}}
+                      disabled={reportUrl==="loading"}
+                    >
+                      {reportUrl==="loading" ? "Generating..." : <><Download size={14}/> Get Print Link</>}
+                    </button>
+                  )}
                   <button className="print-modal-btn print-modal-close" onClick={e=>{e.stopPropagation();setPrintModal(null);setReportUrl(null);}}>
                     ✕ Close
                   </button>
