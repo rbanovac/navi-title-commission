@@ -161,16 +161,25 @@ interface SavedEntry {
 
 // ─── Print / Export Helpers ────────────────────────────────────────────────────
 
-function downloadHTML(html: string, filename: string) {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+function downloadHTML(html: string, _filename: string) {
+  // Open in a new tab — works reliably inside sandboxed iframes.
+  // The page auto-triggers window.print() so the user can Save as PDF.
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  } else {
+    // Popup blocked fallback: encode as data URI
+    const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(html);
+    const a = document.createElement("a");
+    a.href = encoded;
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 }
 
 function exportRepPDF(rep: RepConfig, entries: SavedEntry[], allEntries: SavedEntry[]) {
