@@ -1473,12 +1473,32 @@ export default function CommissionDashboard() {
   const [apiStatus, setApiStatus]       = useState<"loading"|"connected"|"offline">("loading");
   const seededRef = useRef(false);
   const [printModal, setPrintModal] = useState<{html:string;title:string}|null>(null);
+  const printFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Wire up the global export callback
   useEffect(() => {
     _showPrintModal = (html, title) => setPrintModal({html, title});
     return () => { _showPrintModal = null; };
   }, []);
+
+  const handlePrint = () => {
+    const frame = printFrameRef.current;
+    if (frame && frame.contentWindow) {
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch(e) {
+        // Fallback: open in new tab
+        const win = window.open("", "_blank");
+        if (win && printModal) {
+          win.document.write(printModal.html);
+          win.document.close();
+          win.focus();
+          setTimeout(() => win.print(), 500);
+        }
+      }
+    }
+  };
 
   // Load from Railway backend on mount
   useEffect(() => {
@@ -1630,7 +1650,7 @@ export default function CommissionDashboard() {
             <div className="print-modal-bar">
               <span className="print-modal-title">{printModal.title}</span>
               <div className="print-modal-actions">
-                <button className="print-modal-btn print-modal-print" onClick={()=>window.print()}>
+                <button className="print-modal-btn print-modal-print" onClick={handlePrint}>
                   <Download size={14}/> Print / Save PDF
                 </button>
                 <button className="print-modal-btn print-modal-close" onClick={()=>setPrintModal(null)}>
@@ -1639,10 +1659,11 @@ export default function CommissionDashboard() {
               </div>
             </div>
             <iframe
+              ref={printFrameRef}
               className="print-modal-frame"
               srcDoc={printModal.html}
               title={printModal.title}
-              sandbox="allow-same-origin allow-scripts"
+              sandbox="allow-same-origin allow-scripts allow-modals"
             />
           </div>
         </div>
