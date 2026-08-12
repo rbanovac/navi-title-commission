@@ -1401,8 +1401,8 @@ function ChartsTab({ savedEntries, onDelete, darkMode }: ChartsTabProps) {
                     </td>
                     <td>{MONTH_NAMES[row.month-1]} {row.year}</td>
                     <td className="td-num">{fmt(row.grossRevenue)}</td>
-                    <td className="td-num">{row.totalClosed ?? "—"}</td>
-                    <td className="td-num">{row.closedResale}</td>
+                    <td className="td-num">{row.totalClosed > 0 ? row.totalClosed : "—"}</td>
+                    <td className="td-num">{row.closedResale > 0 ? `${row.closedResale} (−${fmt(row.closedResale * row.resaleDeductionAmt)})` : "—"}</td>
                     <td className="td-num">{baseDisplay}</td>
                     <td className="td-num td-commission">{fmt(row.commission)}</td>
                     <td className="td-num">{row.repName==="Hannah Pfleiger" && row.captureRate != null ? `${row.captureRate.toFixed(1)}%` : "—"}</td>

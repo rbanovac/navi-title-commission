@@ -24,6 +24,7 @@ export const monthlyData = sqliteTable("monthly_data", {
   month: integer("month").notNull(), // 1–12
   grossRevenue: real("gross_revenue").notNull().default(0),
   closedResale: integer("closed_resale").notNull().default(0),
+  totalClosed: integer("total_closed").notNull().default(0),
   // Computed & stored for fast charting
   commission: real("commission").notNull().default(0),
   employmentMonth: integer("employment_month").notNull().default(1),

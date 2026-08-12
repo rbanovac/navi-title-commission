@@ -100,7 +100,24 @@ export class DatabaseStorage implements IStorage {
           eq(monthlyData.month, data.month),
         )).get()!;
     } else {
-      return db.insert(monthlyData).values(data).returning().get();
+      sqlite.prepare(`
+        INSERT INTO monthly_data
+          (rep_name, year, month, gross_revenue, closed_resale, total_closed, commission, employment_month, comm_base, guarantee, resale_deduction_amt, escrow_fees, title_fees, capture_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.repName, data.year, data.month,
+        data.grossRevenue, data.closedResale, (data as any).totalClosed ?? 0,
+        data.commission, data.employmentMonth,
+        (data as any).commBase ?? 0, (data as any).guarantee ?? 0, (data as any).resaleDeductionAmt ?? 250,
+        (data as any).escrowFees ?? 0, (data as any).titleFees ?? 0,
+        (data as any).captureRate ?? null
+      );
+      return db.select().from(monthlyData)
+        .where(and(
+          eq(monthlyData.repName, data.repName),
+          eq(monthlyData.year, data.year),
+          eq(monthlyData.month, data.month),
+        )).get()!;
     }
   }
 
