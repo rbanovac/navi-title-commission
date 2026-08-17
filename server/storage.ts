@@ -11,6 +11,10 @@ const DB_PATH = process.env.NODE_ENV === "production"
   ? "/data/commission.db"
   : path.resolve(process.cwd(), "data.db");
 
+// Ensure the directory exists before opening the database
+import { mkdirSync } from 'node:fs';
+try { mkdirSync(path.dirname(DB_PATH), { recursive: true }); } catch {}
+
 const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 
