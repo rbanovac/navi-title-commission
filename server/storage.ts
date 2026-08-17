@@ -7,12 +7,14 @@ import path from "path";
 
 // Production (Railway): use the persistent volume mounted at /data so the DB
 // survives redeploys. Development: keep it in the project root.
-const DB_PATH = process.env.NODE_ENV === "production"
-  ? "/data/commission.db"
-  : path.resolve(process.cwd(), "data.db");
+import { mkdirSync, existsSync } from 'node:fs';
 
-// Ensure the directory exists before opening the database
-import { mkdirSync } from 'node:fs';
+// Use /data (Railway persistent volume) if it exists, otherwise fall back to cwd (pplx.app sandbox)
+const DATA_DIR = existsSync('/data') ? '/data' : process.cwd();
+const DB_PATH = process.env.NODE_ENV === 'production'
+  ? path.join(DATA_DIR, 'commission.db')
+  : path.resolve(process.cwd(), 'data.db');
+
 try { mkdirSync(path.dirname(DB_PATH), { recursive: true }); } catch {}
 
 const sqlite = new Database(DB_PATH);
