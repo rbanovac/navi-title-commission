@@ -88,11 +88,27 @@ const REPS: RepConfig[] = [
     getGuarantee: () => 0,
     startLabel: "Dec 2025",
   },
+  {
+    name: "Lexi McMullin",
+    startDate: new Date(2026, 9, 1),
+    // Mo 1–4: $2,500 guaranteed draw (NOT a base deduction). Mo 5–6: $0. Mo 7+: $25k base
+    getCommBase: (m) => (m <= 6 ? 0 : 25000),
+    getGuarantee: (m) => (m <= 4 ? 2500 : 0),
+    startLabel: "Oct 2026",
+  },
+  {
+    name: "Kim Leal",
+    startDate: new Date(2026, 0, 1),
+    // $12,500 commission base, standard $250 per closed resale
+    getCommBase: () => 12500,
+    getGuarantee: () => 0,
+    startLabel: "—",
+  },
 ];
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const REP_COLORS  = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899","#14b8a6"];
+const REP_COLORS  = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899","#14b8a6","#84cc16","#a855f7"];
 
 // Reps that use the split Navi Revenue + JV Fees input instead of a single revenue field
 const SPLIT_REVENUE_REPS = new Set(["Sarah Perkins", "Joanna Jones"]);
@@ -693,7 +709,7 @@ function RepRow({ rep, year, month, revenue, resale, totalClosed, escrowFees, ti
   const isHannah  = rep.name === "Hannah Pfleiger";
   const hannah    = isHannah ? calcHannahCommission(gross) : null;
   const r         = isHannah ? { commission: hannah!.commission, resaleDeduction:0, afterDeduction:gross, commissionable:gross, t10:0, t125:0 } : calcCommission(gross, res, commBase, resaleDedAmt);
-  const hasTimeline = ["Carrie Shuler","Victoria Ming","Cristina Polanco"].includes(rep.name);
+  const hasTimeline = ["Carrie Shuler","Victoria Ming","Cristina Polanco","Lexi McMullin"].includes(rep.name);
 
   let baseLabel: string;
   let baseColor: string;
