@@ -19,6 +19,8 @@ interface RepConfig {
   /** Returns the guaranteed draw amount (shown as info only, not deducted) */
   getGuarantee: (empMonth: number) => number;
   startLabel: string;
+  /** First month (1st of month) the rep is NO LONGER on the dashboard. History before this date is kept. */
+  endsBefore?: Date;
 }
 
 const REPS: RepConfig[] = [
@@ -42,6 +44,7 @@ const REPS: RepConfig[] = [
     getCommBase: () => 25000,
     getGuarantee: () => 0,
     startLabel: "Jul 2022",
+    endsBefore: new Date(2027, 0, 1), // removed starting Jan 2027
   },
   {
     name: "Jackie Jarquin",
@@ -65,6 +68,7 @@ const REPS: RepConfig[] = [
     getCommBase: (m) => (m <= 4 ? 0 : m <= 12 ? 0 : 25000),
     getGuarantee: (m) => (m <= 4 ? 4000 : 0),
     startLabel: "Apr 2026",
+    endsBefore: new Date(2027, 0, 1), // removed starting Jan 2027
   },
   {
     name: "Cristina Polanco",
@@ -73,6 +77,7 @@ const REPS: RepConfig[] = [
     getCommBase: (m) => (m <= 4 ? 0 : m <= 8 ? 0 : 25000),
     getGuarantee: (m) => (m <= 4 ? 3000 : 0),
     startLabel: "Mar 2026",
+    endsBefore: new Date(2027, 0, 1), // removed starting Jan 2027
   },
   {
     name: "Sarah Perkins",
@@ -105,6 +110,12 @@ const REPS: RepConfig[] = [
     startLabel: "—",
   },
 ];
+
+/** Reps shown/saved/exported for a given period (excludes reps removed as of that month). */
+function repsFor(year: number, month: number): RepConfig[] {
+  const t = new Date(year, month - 1, 1).getTime();
+  return REPS.filter(r => !r.endsBefore || t < r.endsBefore.getTime());
+}
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -358,8 +369,8 @@ function exportSPR(month: number, year: number, entries: SavedEntry[]) {
   const totalResale = monthEntries.reduce((s,e)=>s+e.closedResale, 0);
 
   const SPR_OWN_SECTION = new Set(["Sarah Perkins", "Hannah Pfleiger"]);
-  const mainReps = REPS.filter(r => !SPR_OWN_SECTION.has(r.name));
-  const ownReps  = REPS.filter(r =>  SPR_OWN_SECTION.has(r.name));
+  const mainReps = repsFor(year, month).filter(r => !SPR_OWN_SECTION.has(r.name));
+  const ownReps  = repsFor(year, month).filter(r =>  SPR_OWN_SECTION.has(r.name));
 
   // Build 3-month window: [month-2, month-1, month]
   const trendMonths: {y:number;m:number}[] = [];
@@ -556,7 +567,7 @@ function exportAccountingPDF(month: number, year: number, entries: SavedEntry[])
   const totalComm = monthEntries.reduce((s,e)=>s+e.commission, 0);
   const totalRev  = monthEntries.reduce((s,e)=>s+e.grossRevenue, 0);
 
-  const rows = REPS.map(rep => {
+  const rows = repsFor(year, month).map(rep => {
     const e = monthEntries.find(e=>e.repName===rep.name);
     if (!e) return `<tr style="color:#9ca3af"><td>${rep.name}</td><td colspan="5" style="text-align:center;font-size:12px">No data for this period</td></tr>`;
     const color = REP_COLORS[REPS.findIndex(r=>r.name===rep.name)] ?? "#6b7280";
@@ -966,9 +977,10 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   const getSaved = (repName: string) =>
     savedEntries.find(s => s.repName===repName && s.year===selYear && s.month===selMonth);
 
-  const monthAlreadySaved = REPS.some(r => getSaved(r.name));
+  const activeReps = repsFor(selYear, selMonth);
+  const monthAlreadySaved = activeReps.some(r => getSaved(r.name));
 
-  const totals = REPS.reduce((acc, rep) => {
+  const totals = activeReps.reduce((acc, rep) => {
     const isSplitTotals = SPLIT_REVENUE_REPS.has(rep.name);
     const gross = isSplitTotals
       ? (parseFloat(escrowFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0)
@@ -983,7 +995,7 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
     return { revenue: acc.revenue + gross, commission: acc.commission + commission };
   }, { revenue: 0, commission: 0 });
 
-  const hasInput = REPS.some(r => {
+  const hasInput = activeReps.some(r => {
     if (SPLIT_REVENUE_REPS.has(r.name)) {
       return (parseFloat(escrowFeesMap[r.name]?.replace(/[^0-9.]/g,"")) || 0) + (parseFloat(titleFeesMap[r.name]?.replace(/[^0-9.]/g,"")) || 0) > 0;
     }
@@ -991,7 +1003,7 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
   });
 
   const handleSave = () => {
-    const entries: SavedEntry[] = REPS.map(rep => {
+    const entries: SavedEntry[] = activeReps.map(rep => {
       const isSplitSave = SPLIT_REVENUE_REPS.has(rep.name);
       const escrowAmt  = isSplitSave ? (parseFloat(escrowFeesMap[rep.name]?.replace(/[^0-9.]/g,"")) || 0) : 0;
       const titleAmt   = isSplitSave ? (parseFloat(titleFeesMap[rep.name]?.replace(/[^0-9.]/g,""))  || 0) : 0;
@@ -1073,7 +1085,7 @@ function CalcTab({ savedEntries, onSaveMonth }: CalcTabProps) {
       </div>
 
       <div className="rep-grid">
-        {REPS.map(rep => (
+        {activeReps.map(rep => (
           <RepRow
             key={rep.name} rep={rep} year={selYear} month={selMonth}
             revenue={revenues[rep.name] ?? ""} resale={resales[rep.name] ?? ""}
